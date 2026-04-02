@@ -1,4 +1,11 @@
 package com.dropie.exception.custom;
 
-public class EventNotFoundException extends RuntimeException {
+import com.dropie.exception.BusinessException;
+import com.dropie.exception.ErrorCode;
+
+public class EventNotFoundException extends BusinessException {
+
+    public EventNotFoundException() {
+        super(ErrorCode.EVENT_NOT_FOUND);
+    }
 }

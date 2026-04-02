@@ -45,6 +45,8 @@ public class Order extends BaseEntity {
     @Column(nullable = false)
     private int totalPrice;
 
+    private String deliveryMemo;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderStatus status;
