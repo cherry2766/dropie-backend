@@ -1,4 +1,11 @@
 package com.dropie.exception.custom;
 
-public class OutOfStockException extends RuntimeException {
+import com.dropie.exception.BusinessException;
+import com.dropie.exception.ErrorCode;
+
+public class OutOfStockException extends BusinessException {
+
+    public OutOfStockException() {
+        super(ErrorCode.OUT_OF_STOCK);
+    }
 }
