@@ -46,19 +46,6 @@ public class JwtTokenProvider {
                 .get("role", String.class);
     }
 
-    // 토큰 만료 여부 확인 (true면 만료됨)
-    // getExpiration() : 토큰에 설정된 만료 시간
-    // before(new Date()) : 만료 시간이 현재 시간보다 이전이면 → 만료된 것
-    public Boolean isExpired(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getExpiration()
-                .before(new Date());
-    }
-
     // 토큰 생성 (email, role, 만료시간 받아서 JWT 문자열 반환)
     public String createToken(String email, String role, Long expiredMs) {
         return Jwts.builder()

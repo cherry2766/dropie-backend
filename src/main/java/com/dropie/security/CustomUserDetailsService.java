@@ -23,8 +23,8 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         // DB에서 email로 유저 조회
         User user = userRepository.findByEmail(email)
-                // 없으면 예외 발생 → Spring Security가 인증 실패로 처리
-                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다: " + email));
+                // 없으면 예외 발생
+                .orElseThrow(() -> new UsernameNotFoundException(email));
 
         // 찾은 유저를 CustomUserDetails로 감싸서 반환
         return new CustomUserDetails(user);

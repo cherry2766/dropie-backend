@@ -43,36 +43,33 @@ public class AuthService {
 
         // 저장된 유저 정보로 바로 토큰 발급
         // → 회원가입과 로그인을 한 번에 처리
-        String token = jwtTokenProvider.createToken(
-                user.getEmail(),
-                user.getRole().name(),
-                1800000L
-        );
-
-        return new LoginResponse(token);
+        return generateTokenResponse(user);
     }
 
-    //로그인
+    // 로그인
     public LoginResponse login(LoginRequest request) {
-        //1. 이메일로 유저 조회 - 없으면 INVALID_CREDENTIALS
+        // 1. 이메일로 유저 조회 - 없으면 INVALID_CREDENTIALS
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
-        //2. 비밀번호 검증 - 틀리면 INVALID_CREDENTIALS
+        // 2. 비밀번호 검증 - 틀리면 INVALID_CREDENTIALS
         // passwordEncoder.matches(입력한평문, DB의암호화된비밀번호)
         // → 내부적으로 입력값을 암호화해서 비교함
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
 
-        //3. JWT 발급
-        //role은 "USER" 또는 "ADMIN" 문자열로 저장
+        // 3. JWT 발급
+        return generateTokenResponse(user);
+    }
+
+    // JWT 토큰 발급 후 LoginResponse 반환
+    private LoginResponse generateTokenResponse(User user) {
         String token = jwtTokenProvider.createToken(
                 user.getEmail(),
                 user.getRole().name(),
                 1800000L
         );
-
         return new LoginResponse(token);
     }
 }
