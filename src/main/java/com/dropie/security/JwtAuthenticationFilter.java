@@ -77,8 +77,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     // GlobalExceptionHandler가 필터까지 커버하지 못하기 때문에 별도로 처리
     // ErrorCode를 받아 메시지를 재사용함으로써 응답 형식 일관성 유지
     private void sendErrorResponse(HttpServletResponse response, ErrorCode errorCode) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        // JSON 형태로 응답하기 위해 Content-Type 설정
+        response.setStatus(errorCode.getStatus().value());
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write("{\"message\": \"" + errorCode.getMessage() + "\"}");
     }
