@@ -2,8 +2,7 @@ package com.dropie.service.user;
 
 import com.dropie.domain.user.User;
 import com.dropie.dto.response.user.UserResponse;
-import com.dropie.exception.BusinessException;
-import com.dropie.exception.ErrorCode;
+import com.dropie.exception.custom.UserNotFoundException;
 import com.dropie.repository.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +19,7 @@ public class UserService {
         log.debug("[getMe] 조회 요청 - email: {}", email);
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(UserNotFoundException::new);
 
         log.info("[getMe] 조회 완료 - userId: {}", user.getId());
 
