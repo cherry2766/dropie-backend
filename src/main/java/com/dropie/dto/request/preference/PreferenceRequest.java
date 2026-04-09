@@ -1,4 +1,4 @@
-package com.dropie.dto.request.user;
+package com.dropie.dto.request.preference;
 
 // 클라이언트가 POST /users/me/preferences 로 보내는 JSON
 // {

@@ -1,4 +1,4 @@
-package com.dropie.dto.response.user;
+package com.dropie.dto.response.address;
 
 import com.dropie.domain.address.Address;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -36,5 +36,3 @@ public class AddressResponse {
                 .build();
     }
 }
-
-

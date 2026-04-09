@@ -1,26 +1,26 @@
-package com.dropie.dto.response.user;
+package com.dropie.dto.response.address;
+
+//PATCH 응답 DTO
 
 import com.dropie.domain.address.Address;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
-//POST 응답 DTO
 @Getter
 @Builder
-public class AddressCreateResponse {
+public class AddressUpdateResponse {
 
-    // POST 응답은 전체 필드가 아닌 핵심 정보만 반환
     private Long id;
-    private String receiverName;
+    private String label;
     // boolean 필드는 Jackson이 is 접두어를 제거해 "default"로 직렬화되므로 명시적으로 지정
     @JsonProperty("isDefault")
     private boolean isDefault;
 
-    public static AddressCreateResponse from(Address address) {
-        return AddressCreateResponse.builder()
+    public static AddressUpdateResponse from(Address address) {
+        return AddressUpdateResponse.builder()
                 .id(address.getId())
-                .receiverName(address.getReceiverName())
+                .label(address.getLabel())
                 .isDefault(address.isDefault())
                 .build();
     }

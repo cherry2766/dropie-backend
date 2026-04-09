@@ -1,10 +1,10 @@
-package com.dropie.controller.user;
+package com.dropie.controller.address;
 
-import com.dropie.dto.request.user.AddressRequest;
-import com.dropie.dto.request.user.AddressUpdateRequest;
-import com.dropie.dto.response.user.AddressCreateResponse;
-import com.dropie.dto.response.user.AddressResponse;
-import com.dropie.dto.response.user.AddressUpdateResponse;
+import com.dropie.dto.request.address.AddressRequest;
+import com.dropie.dto.request.address.AddressUpdateRequest;
+import com.dropie.dto.response.address.AddressCreateResponse;
+import com.dropie.dto.response.address.AddressResponse;
+import com.dropie.dto.response.address.AddressUpdateResponse;
 import com.dropie.service.address.AddressService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

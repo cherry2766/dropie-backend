@@ -1,6 +1,6 @@
-package com.dropie.controller.user;
+package com.dropie.controller.preference;
 
-import com.dropie.dto.request.user.PreferenceRequest;
+import com.dropie.dto.request.preference.PreferenceRequest;
 import com.dropie.service.preference.PreferenceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

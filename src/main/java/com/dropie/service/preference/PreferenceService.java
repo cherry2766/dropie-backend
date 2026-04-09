@@ -4,7 +4,7 @@ package com.dropie.service.preference;
 import com.dropie.domain.preference.UserPreference;
 import com.dropie.domain.tag.Tag;
 import com.dropie.domain.user.User;
-import com.dropie.dto.request.user.PreferenceRequest;
+import com.dropie.dto.request.preference.PreferenceRequest;
 import com.dropie.exception.BusinessException;
 import com.dropie.exception.ErrorCode;
 import com.dropie.exception.custom.UserNotFoundException;

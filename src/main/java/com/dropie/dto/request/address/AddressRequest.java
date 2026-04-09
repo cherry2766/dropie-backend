@@ -1,4 +1,4 @@
-package com.dropie.dto.request.user;
+package com.dropie.dto.request.address;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

@@ -1,4 +1,4 @@
-package com.dropie.controller.user;
+package com.dropie.controller.preference;
 
 import com.dropie.config.SecurityConfig;
 import com.dropie.exception.BusinessException;

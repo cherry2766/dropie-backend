@@ -1,9 +1,9 @@
-package com.dropie.controller.user;
+package com.dropie.controller.address;
 
 import com.dropie.config.SecurityConfig;
-import com.dropie.dto.response.user.AddressCreateResponse;
-import com.dropie.dto.response.user.AddressResponse;
-import com.dropie.dto.response.user.AddressUpdateResponse;
+import com.dropie.dto.response.address.AddressCreateResponse;
+import com.dropie.dto.response.address.AddressResponse;
+import com.dropie.dto.response.address.AddressUpdateResponse;
 import com.dropie.exception.BusinessException;
 import com.dropie.exception.ErrorCode;
 import com.dropie.security.JwtTokenProvider;
