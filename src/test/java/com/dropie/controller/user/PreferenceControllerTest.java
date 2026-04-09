@@ -22,16 +22,23 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+// PreferenceController 레이어만 Spring에 올림
+// Service는 @MockitoBean으로 대체 → 실제 비즈니스 로직 실행 없이 HTTP 동작만 검증
 @WebMvcTest(PreferenceController.class)
+// SecurityConfig 명시적 로드 → csrf disable, 인증 필터 등 Security 설정 적용
 @Import(SecurityConfig.class)
 class PreferenceControllerTest {
 
+    // 실제 HTTP 서버 없이 컨트롤러에 가상 요청을 보내는 도구
     @Autowired
     private MockMvc mockMvc;
 
+    // 실제 Service 대신 Mock으로 대체 — 원하는 응답을 직접 지정
     @MockitoBean
     private PreferenceService preferenceService;
 
+    // SecurityConfig가 로드될 때 JwtTokenProvider 빈이 필요함
+    // 실제 JWT 동작은 필요 없고 빈 등록만 되면 되므로 Mock으로 대체
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 

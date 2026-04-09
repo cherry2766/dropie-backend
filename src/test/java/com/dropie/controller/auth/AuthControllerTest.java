@@ -50,7 +50,7 @@ class AuthControllerTest {
         // SecurityConfig에서 /auth/**는 permitAll() → @WithMockUser 불필요
         // SecurityConfig에서 csrf().disable() → .with(csrf()) 불필요
         given(authService.signUp(any()))
-                .willReturn(new LoginResponse("jwt.token.here"));
+                .willReturn(LoginResponse.builder().accessToken("jwt.token.here").build());
 
         // when & then
         // mockMvc.perform() : 가상 HTTP 요청 실행
@@ -97,7 +97,7 @@ class AuthControllerTest {
 
         // given
         given(authService.login(any()))
-                .willReturn(new LoginResponse("jwt.token.here"));
+                .willReturn(LoginResponse.builder().accessToken("jwt.token.here").build());
 
         // when & then
         mockMvc.perform(post("/auth/login")

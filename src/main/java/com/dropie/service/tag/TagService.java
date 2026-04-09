@@ -23,7 +23,7 @@ public class TagService {
 
         return tagRepository.findAll()
                 .stream()
-                .map(TagResponse::new)
+                .map(TagResponse::from)
                 .toList();
     }
 }

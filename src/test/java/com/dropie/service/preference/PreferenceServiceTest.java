@@ -25,12 +25,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+// Spring Context 없이 Mockito만으로 PreferenceService 단위 테스트
 @ExtendWith(MockitoExtension.class)
 class PreferenceServiceTest {
 
+    // 테스트 대상 — 아래 @Mock들이 자동 주입됨
     @InjectMocks
     private PreferenceService preferenceService;
 
+    // 실제 DB 대신 가짜 객체로 대체
     @Mock
     private UserRepository userRepository;
 

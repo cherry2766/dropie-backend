@@ -2,10 +2,14 @@ package com.dropie.dto.request.user;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 //POST 요청 DTO
 @Getter
+@NoArgsConstructor  // Jackson이 JSON → 객체 변환 시 기본 생성자 필요
+@AllArgsConstructor // 테스트에서 생성자로 객체 생성 시 사용
 public class AddressRequest {
 
     @NotBlank
