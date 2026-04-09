@@ -1,6 +1,7 @@
 package com.dropie.dto.response.user;
 
 import com.dropie.domain.address.Address;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -16,6 +17,8 @@ public class AddressResponse {
     private String address1;
     private String address2;
     private String label;
+    // boolean 필드는 Jackson이 is 접두어를 제거해 "default"로 직렬화되므로 명시적으로 지정
+    @JsonProperty("isDefault")
     private boolean isDefault;
 
     // Entity → DTO 변환은 DTO 안에 팩토리 메서드로 두는 게 일반적
