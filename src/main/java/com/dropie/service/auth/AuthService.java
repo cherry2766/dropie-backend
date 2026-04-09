@@ -81,6 +81,6 @@ public class AuthService {
                 user.getRole().name(),
                 1800000L
         );
-        return new LoginResponse(token);
+        return LoginResponse.builder().accessToken(token).build();
     }
 }

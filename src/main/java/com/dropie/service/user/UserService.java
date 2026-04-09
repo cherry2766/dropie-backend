@@ -25,12 +25,12 @@ public class UserService {
 
         // User 엔티티를 그대로 반환하지 않고 DTO로 변환해서 반환
         // → 필요한 필드만 노출, password 같은 민감한 정보 차단
-        return new UserResponse(
-                user.getId(),
-                user.getEmail(),
-                user.getNickname(),
-                user.getRole().name()   // enum → String 변환 (ex. "USER", "ADMIN")
-        );
+        return UserResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .role(user.getRole().name())  // enum → String 변환 (ex. "USER", "ADMIN")
+                .build();
     }
 
 
