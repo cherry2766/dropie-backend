@@ -1,34 +1,23 @@
 package com.dropie.dto.request.event;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-// POST 요청 DTO — 필수값은 @NotBlank / @NotNull로 검증
+// PATCH 요청 DTO — 변경할 필드만 포함, 모든 필드 null 허용
+// @Valid 없음 — null이면 기존값 유지, brandName은 변경 불가라 포함하지 않음
 @Getter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreateEventRequest {
+public class UpdateEventRequest {
 
-    @NotBlank
-    private String brandName;
-
-    @NotBlank
     private String description;
-
-    @NotBlank
     private String thumbnailImageUrl;
-
-    @NotBlank
     private String imageUrl;
-
-    @NotNull
     private LocalDateTime startAt;
-
-    @NotNull
     private LocalDateTime endAt;
 }

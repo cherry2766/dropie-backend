@@ -3,6 +3,8 @@ package com.dropie.domain.event;
 import com.dropie.domain.common.BaseEntity;
 import com.dropie.domain.enums.EventStatus;
 import com.dropie.domain.product.Product;
+import com.dropie.exception.BusinessException;
+import com.dropie.exception.ErrorCode;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -44,4 +46,23 @@ public class Event extends BaseEntity {
 
     @OneToMany(mappedBy = "event")
     private List<Product> products = new ArrayList<>();
+
+    // PATCH 부분 업데이트 — null이면 기존 값 유지
+    // brandName은 수정 불가로 설계
+    public void update(String description, String thumbnailImageUrl, String imageUrl, LocalDateTime startAt, LocalDateTime endAt) {
+        if(description != null) this.description = description;
+        if(thumbnailImageUrl != null) this.thumbnailImageUrl = thumbnailImageUrl;
+        if(imageUrl != null) this.imageUrl = imageUrl;
+        if(startAt != null) this.startAt = startAt;
+        if(endAt != null) this.endAt = endAt;
+    }
+
+    // 상태 전환 — 허용 불가면 INVALID_STATUS_TRANSITION 예외
+    // canTransitionTo()로 전환 가능 여부를 EventStatus 자체에서 판단
+    public void changeStatus(EventStatus newStatus) {
+        if(!this.status.canTransitionTo(newStatus)) {
+            throw new BusinessException(ErrorCode.INVALID_STATUS_TRANSITION);
+        }
+        this.status = newStatus;
+    }
 }
