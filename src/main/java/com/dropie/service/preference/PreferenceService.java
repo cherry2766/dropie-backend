@@ -37,7 +37,10 @@ public class PreferenceService {
 
         // 1. 이메일로 유저 조회 → 없으면 예외
         User user = userRepository.findByEmail(email)
-                .orElseThrow(UserNotFoundException::new);
+                .orElseThrow(() -> {
+                    log.warn("[savePreferences] 유저 없음 - email: {}", email);
+                    return new UserNotFoundException();
+                });
 
         // 2. 요청된 tagId 목록으로 Tag 엔티티 조회
         List<Tag> tags = tagRepository.findAllByIdIn(request.getTagIds());

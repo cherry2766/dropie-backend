@@ -19,7 +19,10 @@ public class UserService {
         log.debug("[getMe] 조회 요청 - email: {}", email);
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(UserNotFoundException::new);
+                .orElseThrow(() -> {
+                    log.warn("[getMe] 유저 없음 - email: {}", email);
+                    return new UserNotFoundException();
+                });
 
         log.info("[getMe] 조회 완료 - userId: {}", user.getId());
 
