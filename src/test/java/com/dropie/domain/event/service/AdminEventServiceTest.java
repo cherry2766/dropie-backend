@@ -131,7 +131,7 @@ class AdminEventServiceTest {
 
     @Test
     @DisplayName("이벤트 상태 변경 성공 - UPCOMING → OPEN")
-    void 이벤트_상태변경_성공() {
+    void 이벤트_상태변경_성공_UPCOMING_to_OPEN() {
         // given
         given(eventRepository.findById(1L)).willReturn(Optional.of(upcomingEvent));
         UpdateEventStatusRequest request = new UpdateEventStatusRequest(EventStatus.OPEN);
@@ -146,11 +146,41 @@ class AdminEventServiceTest {
 
     @Test
     @DisplayName("이벤트 상태 변경 실패 - FINISHED → OPEN 허용 불가")
-    void 이벤트_상태변경_허용불가전환_예외() {
+    void 이벤트_상태변경_허용불가전환_FINISHED_to_OPEN_예외() {
         // given
         given(eventRepository.findById(1L)).willReturn(Optional.of(finishedEvent));
         // FINISHED는 어떤 상태로도 전환 불가
         UpdateEventStatusRequest request = new UpdateEventStatusRequest(EventStatus.OPEN);
+
+        // when & then
+        assertThatThrownBy(() ->
+                adminEventService.changeEventStatus(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_STATUS_TRANSITION);
+    }
+
+    @Test
+    @DisplayName("이벤트 상태 변경 성공 - OPEN → CLOSED")
+    void 이벤트_상태변경_성공_OPEN_to_CLOSED() {
+        // given
+        given(eventRepository.findById(1L)).willReturn(Optional.of(openEvent));
+        UpdateEventStatusRequest request = new UpdateEventStatusRequest(EventStatus.CLOSED);
+
+        // when
+        EventStatusResponse response = adminEventService.changeEventStatus(1L, request);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(EventStatus.CLOSED);
+        assertThat(openEvent.getStatus()).isEqualTo(EventStatus.CLOSED);
+    }
+
+    @Test
+    @DisplayName("이벤트 상태 변경 실패 - OPEN → UPCOMING 허용 불가")
+    void 이벤트_상태변경_허용불가전환_OPEN_to_UPCOMING_예외() {
+        // given
+        given(eventRepository.findById(1L)).willReturn(Optional.of(openEvent));
+        UpdateEventStatusRequest request = new UpdateEventStatusRequest(EventStatus.UPCOMING);
 
         // when & then
         assertThatThrownBy(() ->
