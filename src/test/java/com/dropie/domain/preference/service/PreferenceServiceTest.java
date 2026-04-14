@@ -77,6 +77,29 @@ class PreferenceServiceTest {
     }
 
     @Test
+    @DisplayName("취향 태그 등록 - tagIds가 비어있으면 저장 없이 종료")
+    void tagIds_비어있으면_저장_스킵() {
+        // given
+        PreferenceRequest request = new PreferenceRequest(List.of());
+
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+
+        // when
+        preferenceService.savePreferences("test@email.com", request);
+
+        // then
+        then(tagRepository).shouldHaveNoInteractions();
+        then(userPreferenceRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
     @DisplayName("취향 태그 등록 실패 - 존재하지 않는 유저")
     void 존재하지_않는_유저_예외() {
         // given
