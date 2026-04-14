@@ -5,6 +5,7 @@ import com.dropie.domain.order.entity.OrderItem;
 import com.dropie.global.common.BaseEntity;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.exception.custom.OutOfStockException;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -61,4 +62,19 @@ public class Product extends BaseEntity {
         if (stock < 0) throw new BusinessException(ErrorCode.INVALID_QUANTITY);
         this.stock = stock;
     }
+
+    // 주문 시 재고 차감 — 재고 부족이면 OUT_OF_STOCK 예외
+    // updateStock()과 구분: 이건 n개 차감, updateStock()은 n으로 직접 설정
+    public void decreaseStock(int quantity) {
+        if(this.stock < quantity) {
+            throw new OutOfStockException();
+        }
+        this.stock -= quantity;
+    }
+
+    // 주문 취소 시 재고 복구 — 차감된 수량만큼 다시 증가
+    public void increaseStock(int quantity) {
+        this.stock += quantity;
+    }
+
 }

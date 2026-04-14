@@ -10,6 +10,7 @@ import java.util.List;
 
 // UserDetails : Spring Security가 인증에 사용하는 인터페이스
 // User 엔티티를 이 인터페이스 형태로 변환해주는 래퍼 클래스
+// 현재 로그인한 사용자 정보를 담고 있는 객체
 public class CustomUserDetails implements UserDetails {
 
     private final User user;

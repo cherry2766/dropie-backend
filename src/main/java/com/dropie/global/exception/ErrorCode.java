@@ -37,7 +37,8 @@ public enum ErrorCode {
     // 주문
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 주문입니다."),                       // 404
     ORDER_TIME_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "주문 가능한 시간이 아닙니다."),           // 400 - 이벤트 오픈 시간 외 주문 시도
-    CANCEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "취소할 수 없는 주문 상태입니다."),            // 400 - PAID/COMPLETED 상태일 때만 발생, 상태 검증은 서비스에서 처리
+    CANCEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "취소할 수 없는 주문 상태입니다."),            // 400 - CANCELED/COMPLETED 상태일 때만 발생, 상태 검증은 Order.cancel()에서 처리
+    DUPLICATE_ORDER_ITEM(HttpStatus.BAD_REQUEST, "동일한 상품을 중복 요청할 수 없습니다."),  // 400 - 같은 productId가 items에 두 번 이상 포함된 경우
 
     // 태그
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 태그입니다."),                         // 404
