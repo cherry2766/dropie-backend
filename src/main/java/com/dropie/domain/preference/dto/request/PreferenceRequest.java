@@ -7,7 +7,6 @@ package com.dropie.domain.preference.dto.request;
 // 온보딩에서 사용자가 선택한 태그 ID 목록을 받음
 // score는 클라이언트에서 받지 않고 서버에서 기본값으로 세팅 (온보딩 = 동일 가중치)
 
-import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,6 +18,5 @@ import java.util.List;
 @NoArgsConstructor
 public class PreferenceRequest {
 
-    @NotEmpty(message = "태그를 1개 이상 선택해야 합니다")
     private List<Long> tagIds;
 }

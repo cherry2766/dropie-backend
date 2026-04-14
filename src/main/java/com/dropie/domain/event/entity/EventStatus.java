@@ -12,7 +12,7 @@ public enum EventStatus {
         return switch (this) {
             case UPCOMING -> target == OPEN || target == FINISHED;
             case OPEN -> target == CLOSED || target == FINISHED;
-            case CLOSED -> target == FINISHED;
+            case CLOSED -> target == OPEN || target == FINISHED;
             case FINISHED -> false;
         };
     }

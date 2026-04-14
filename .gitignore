@@ -40,3 +40,5 @@ out/
 application.yml
 application-local.yml
 .claude/
+CLAUDE.md
+docs/

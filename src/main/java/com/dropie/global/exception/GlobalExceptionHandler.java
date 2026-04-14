@@ -1,5 +1,6 @@
 package com.dropie.global.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -16,10 +17,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(code.getStatus()).body(ErrorResponse.of(code));
     }
 
-    // @Valid 유효성 검사 실패 시 처리
+    // @Valid + @RequestBody 유효성 검사 실패 시 처리
+    // 예: CreateOrderRequest의 @NotBlank, @NotEmpty 등
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.of(ErrorCode.INVALID_INPUT));
+    }
 
+    // @Validated + @RequestParam/@PathVariable 유효성 검사 실패 시 처리
+    // 예: @Min(1) page 파라미터 위반
+    // MethodArgumentNotValidException과 다른 예외 클래스라 별도 핸들러 필요
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse.of(ErrorCode.INVALID_INPUT));
     }
 }

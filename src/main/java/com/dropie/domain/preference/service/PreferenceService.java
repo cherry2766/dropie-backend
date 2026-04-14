@@ -41,19 +41,25 @@ public class PreferenceService {
                     return new UserNotFoundException();
                 });
 
-        // 2. 요청된 tagId 목록으로 Tag 엔티티 조회
+        // 2. tagIds가 없으면 스킵 (온보딩은 선택 사항)
+        if (request.getTagIds() == null || request.getTagIds().isEmpty()) {
+            log.debug("[savePreferences] tagIds 없음 - 스킵");
+            return;
+        }
+
+        // 3. 요청된 tagId 목록으로 Tag 엔티티 조회
         List<Tag> tags = tagRepository.findAllByIdIn(request.getTagIds());
 
-        // 3. 존재하지 않는 tagId가 포함된 경우 예외
+        // 4. 존재하지 않는 tagId가 포함된 경우 예외
         // 요청한 tagIds 수와 실제 조회된 Tag 수가 다르면 잘못된 tagId가 있는 것
         if (tags.size() != request.getTagIds().size()) {
             throw new BusinessException(ErrorCode.TAG_NOT_FOUND);
         }
 
-        // 4. 기존 취향 태그 전체 삭제 (온보딩 재시도 시 덮어쓰기)
+        // 5. 기존 취향 태그 전체 삭제 (온보딩 재시도 시 덮어쓰기)
         userPreferenceRepository.deleteByUser(user);
 
-        // 5. 새 UserPreference 생성 후 저장
+        // 6. 새 UserPreference 생성 후 저장
         List<UserPreference> preferences = tags.stream()
                 .map(tag -> UserPreference.builder()
                         .user(user)
