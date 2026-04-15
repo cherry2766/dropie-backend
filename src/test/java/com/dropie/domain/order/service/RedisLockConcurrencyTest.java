@@ -1,4 +1,155 @@
 package com.dropie.domain.order.service;
 
+import com.dropie.domain.event.entity.Event;
+import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.repository.EventRepository;
+import com.dropie.domain.order.dto.request.CreateOrderRequest;
+import com.dropie.domain.order.repository.OrderItemRepository;
+import com.dropie.domain.order.repository.OrderRepository;
+import com.dropie.domain.product.entity.Product;
+import com.dropie.domain.product.repository.ProductRepository;
+import com.dropie.domain.user.entity.Role;
+import com.dropie.domain.user.entity.User;
+import com.dropie.domain.user.repository.UserRepository;
+import com.dropie.global.exception.BusinessException;
+import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.security.CustomUserDetails;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+@SpringBootTest
+@TestPropertySource(properties = "app.lock.type=redis")
 public class RedisLockConcurrencyTest {
+
+    @Autowired private RedisLockOrderFacade redisLockOrderFacade;
+    @Autowired private ProductRepository productRepository;
+    @Autowired private EventRepository eventRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private OrderRepository orderRepository;
+    @Autowired private OrderItemRepository orderItemRepository;
+
+    private static final int INITIAL_STOCK = 50;
+    private static final int THREAD_COUNT = 100;
+
+    private Product product;
+    private User testUser;
+
+    @BeforeEach
+    void setUp() {
+        Event event = eventRepository.save(Event.builder()
+                .brandName("동시성 테스트 브랜드")
+                .status(EventStatus.OPEN)
+                .startAt(LocalDateTime.now().minusHours(1))
+                .endAt(LocalDateTime.now().plusHours(1))
+                .build());
+
+        product = productRepository.save(Product.builder()
+                .event(event)
+                .name("한정판 테스트 상품")
+                .price(10000)
+                .stock(INITIAL_STOCK)
+                .build());
+
+        testUser = userRepository.save(User.builder()
+                .email("test@test.com")
+                .password("encoded_password")
+                .nickname("Redis테스터")
+                .role(Role.USER)
+                .build());
+    }
+
+    @AfterEach
+    void tearDown() {
+        orderItemRepository.deleteAll();
+        orderRepository.deleteAll();
+        productRepository.deleteAll();
+        eventRepository.deleteAll();
+        userRepository.deleteAll();
+    }
+
+    @Test
+    @DisplayName("Redis 분산 락 — 100명 동시 주문, 재고 50개 → 정확히 50건 성공, 잔여 재고 0")
+    void Redis_분산_락_100명_동시_주문_전원_처리() throws InterruptedException {
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(THREAD_COUNT);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger outOfStockCount = new AtomicInteger(0);  // 재고 소진 실패
+        AtomicInteger lockFailCount = new AtomicInteger(0);    // 락 획득 실패 (waitTime 초과)
+
+        CreateOrderRequest orderRequest = CreateOrderRequest.builder()
+                .receiverName("포도알")
+                .phone("010-1234-5678")
+                .zipcode("12345")
+                .address1("서울시 강남구")
+                .address2("101호")
+                .items(List.of(
+                        CreateOrderRequest.OrderItemRequest.builder()
+                                .productId(product.getId())
+                                .quantity(1)
+                                .build()
+                ))
+                .build();
+
+        CustomUserDetails userDetails = new CustomUserDetails(testUser);
+
+        for (int i = 0; i < THREAD_COUNT; i++) {
+            executorService.submit(() -> {
+                try {
+                    startLatch.await();
+                    redisLockOrderFacade.createOrder(orderRequest, userDetails);
+                    successCount.incrementAndGet();
+                } catch (BusinessException e) {
+                    // LOCK_ACQUISITION_FAILED: waitTime 초과로 락 자체를 못 잡은 실패 → Redis 락의 한계
+                    // OUT_OF_STOCK, EVENT_ENDED 등: 재고 소진 또는 이벤트 마감으로 인한 정상 실패
+                    //   (50번째 주문이 완료되면 이벤트가 자동 CLOSED → 이후 스레드는 EVENT_ENDED 예외)
+                    if (e.getErrorCode() == ErrorCode.LOCK_ACQUISITION_FAILED) {
+                        lockFailCount.incrementAndGet();
+                    } else {
+                        outOfStockCount.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        doneLatch.await();
+        executorService.shutdown();
+
+        Product updated = productRepository.findById(product.getId()).get();
+
+        // 핵심 검증 1: 재고 음수 없음
+        assertThat(updated.getStock()).isGreaterThanOrEqualTo(0);
+        // 핵심 검증 2: 성공 + 잔여 재고 = 초기 재고 (정합성)
+        assertThat(successCount.get() + updated.getStock()).isEqualTo(INITIAL_STOCK);
+        // Redis 분산 락 핵심 검증: 재고 내에서 요청한 모든 주문이 성공
+        // (재시도 소진 실패가 없음 — 낙관적 락과의 차이점)
+        assertThat(lockFailCount.get()).isEqualTo(0);
+        // 재고 50개이므로 정확히 50건 성공, 나머지 50건은 OUT_OF_STOCK
+        assertThat(successCount.get()).isEqualTo(INITIAL_STOCK);
+        assertThat(updated.getStock()).isEqualTo(0);
+
+        System.out.printf("[Redis 분산 락] 성공: %d건 / 주문 불가(재고소진·이벤트마감): %d건 / 락 획득 실패: %d건%n",
+                successCount.get(), outOfStockCount.get(), lockFailCount.get());
+    }
+
 }
