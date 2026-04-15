@@ -42,6 +42,13 @@ public class Product extends BaseEntity {
     @Column(nullable = false)
     private int stock;
 
+    // @Version: 낙관적 락을 위한 버전 관리 컬럼
+    // JPA가 UPDATE 쿼리에 자동으로 "WHERE version = :현재버전" 조건을 붙임
+    // 두 트랜잭션이 동시에 같은 version을 읽고 UPDATE를 시도하면,
+    // 먼저 커밋한 쪽이 version을 올려버려 나중 쪽은 조건이 0건 → ObjectOptimisticLockingFailureException 발생
+    @Version
+    private Long version;
+
     @OneToMany(mappedBy = "product")
     private List<OrderItem> orderItems = new ArrayList<>();
 

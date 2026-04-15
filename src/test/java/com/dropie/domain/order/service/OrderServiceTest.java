@@ -119,7 +119,7 @@ class OrderServiceTest {
                     .event(openEvent)
                     .build();
 
-            given(productRepository.findById(10L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(10L)).willReturn(Optional.of(product));
             // save()가 호출되면 넘어온 Order 그대로 반환 (DB가 없으니 저장된 척)
             given(orderRepository.save(any(Order.class))).willAnswer(inv -> inv.getArgument(0));
 
@@ -143,8 +143,8 @@ class OrderServiceTest {
             Product productA = Product.builder().id(1L).name("상품A").price(3000).stock(10).event(openEvent).build();
             Product productB = Product.builder().id(2L).name("상품B").price(7000).stock(10).event(openEvent).build();
 
-            given(productRepository.findById(1L)).willReturn(Optional.of(productA));
-            given(productRepository.findById(2L)).willReturn(Optional.of(productB));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(productA));
+            given(productRepository.findByIdWithOptimisticLock(2L)).willReturn(Optional.of(productB));
             given(orderRepository.save(any(Order.class))).willAnswer(inv -> inv.getArgument(0));
 
             CreateOrderRequest request = buildRequest(List.of(
@@ -168,7 +168,7 @@ class OrderServiceTest {
             // given — stock 10개에서 3개 주문 → 7개 남아야 함
             Product product = Product.builder().id(1L).name("상품").price(1000).stock(10).event(openEvent).build();
 
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
             given(orderRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(1L, 3)));
@@ -204,7 +204,7 @@ class OrderServiceTest {
         @DisplayName("존재하지 않는 상품 — ProductNotFoundException")
         void 존재하지_않는_상품_주문_예외() {
             // given — DB에 없는 상품 ID 요청
-            given(productRepository.findById(999L)).willReturn(Optional.empty());
+            given(productRepository.findByIdWithOptimisticLock(999L)).willReturn(Optional.empty());
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(999L, 1)));
 
@@ -225,7 +225,7 @@ class OrderServiceTest {
                     .build();
 
             Product product = Product.builder().id(1L).name("상품").price(1000).stock(10).event(closedEvent).build();
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(1L, 1)));
 
@@ -248,7 +248,7 @@ class OrderServiceTest {
                     .build();
 
             Product product = Product.builder().id(1L).name("상품").price(1000).stock(10).event(finishedEvent).build();
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(1L, 1)));
 
@@ -273,7 +273,7 @@ class OrderServiceTest {
                     .build();
 
             Product product = Product.builder().id(1L).name("상품").price(1000).stock(10).event(expiredEvent).build();
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(1L, 1)));
 
@@ -296,7 +296,7 @@ class OrderServiceTest {
                     .build();
 
             Product product = Product.builder().id(1L).name("상품").price(1000).stock(10).event(upcomingEvent).build();
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(1L, 1)));
 
@@ -319,7 +319,7 @@ class OrderServiceTest {
                     .build();
 
             Product product = Product.builder().id(1L).name("상품").price(1000).stock(10).event(notStartedEvent).build();
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(1L, 1)));
 
@@ -335,7 +335,7 @@ class OrderServiceTest {
         void 재고_부족_주문_예외() {
             // given — 재고가 2개밖에 없는데 3개 주문 시도
             Product product = Product.builder().id(1L).name("상품").price(1000).stock(2).event(openEvent).build();
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
 
             CreateOrderRequest request = buildRequest(List.of(buildItem(1L, 3)));
 
@@ -359,7 +359,7 @@ class OrderServiceTest {
                     .event(openEvent)
                     .build();
 
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
             given(orderRepository.save(any(Order.class))).willAnswer(inv -> inv.getArgument(0));
 
             // 재고 차감 후 이 이벤트에 재고 남은 상품이 없음 → 전체 품절
@@ -390,7 +390,7 @@ class OrderServiceTest {
                     .event(openEvent)
                     .build();
 
-            given(productRepository.findById(1L)).willReturn(Optional.of(product));
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(product));
             given(orderRepository.save(any(Order.class))).willAnswer(inv -> inv.getArgument(0));
 
             // @BeforeEach 기본값 true — 재고 있는 상품이 아직 있음
