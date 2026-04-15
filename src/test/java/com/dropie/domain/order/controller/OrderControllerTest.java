@@ -6,6 +6,7 @@ import com.dropie.domain.order.dto.response.OrderCreateResponse;
 import com.dropie.domain.order.dto.response.OrderDetailResponse;
 import com.dropie.domain.order.dto.response.OrderResponse;
 import com.dropie.domain.order.entity.OrderStatus;
+import com.dropie.domain.order.service.CreateOrderUseCase;
 import com.dropie.domain.order.service.OrderService;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
@@ -52,6 +53,10 @@ class OrderControllerTest {
     // @MockitoBean: 해당 빈을 Mockito Mock으로 교체해 Spring Context에 등록
     @MockitoBean
     private OrderService orderService;
+
+    // CreateOrderUseCase: 주문 생성 전용 인터페이스 — 컨트롤러가 직접 호출하므로 Mock 필요
+    @MockitoBean
+    private CreateOrderUseCase createOrderUseCase;
 
     // JwtTokenProvider: SecurityConfig 내부에서 빈으로 주입받기 때문에 Mock 등록 필요
     // 없으면 SecurityConfig 로드 시 UnsatisfiedDependencyException 발생
@@ -110,7 +115,7 @@ class OrderControllerTest {
 
             // any(CreateOrderRequest.class): 요청 객체는 컨트롤러가 역직렬화해서 만들므로
             // 정확한 인스턴스를 특정할 수 없음 → any()로 매칭
-            given(orderService.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
+            given(createOrderUseCase.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
                     .willReturn(response);
 
             // when & then
@@ -217,7 +222,7 @@ class OrderControllerTest {
         @DisplayName("이벤트 오픈 시간이 아니면 400 반환")
         void 주문_생성_이벤트시간외_400() throws Exception {
             // given
-            given(orderService.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
+            given(createOrderUseCase.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
                     .willThrow(new BusinessException(ErrorCode.ORDER_TIME_NOT_ALLOWED));
 
             // when & then
@@ -233,7 +238,7 @@ class OrderControllerTest {
         @DisplayName("재고 부족 시 409 반환")
         void 주문_생성_재고부족_409() throws Exception {
             // given
-            given(orderService.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
+            given(createOrderUseCase.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
                     .willThrow(new BusinessException(ErrorCode.OUT_OF_STOCK));
 
             // when & then
@@ -249,7 +254,7 @@ class OrderControllerTest {
         @DisplayName("중복 상품 요청 시 400 반환")
         void 주문_생성_중복상품_400() throws Exception {
             // given
-            given(orderService.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
+            given(createOrderUseCase.createOrder(any(CreateOrderRequest.class), any(CustomUserDetails.class)))
                     .willThrow(new BusinessException(ErrorCode.DUPLICATE_ORDER_ITEM));
 
             // when & then
