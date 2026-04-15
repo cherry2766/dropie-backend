@@ -84,8 +84,9 @@ public class OrderService {
         // Set을 쓰는 이유: 같은 이벤트의 상품을 여러 개 주문해도 품절 체크는 한 번만 하면 됨
         Set<Event> affectedEvents = new HashSet<>();
 
+        // findByIdWithOptimisticLock()으로 조회해야 트랜잭션 커밋 시점에 version 검증이 수행됨
         for(CreateOrderRequest.OrderItemRequest req : request.getItems()) {
-            Product product = productRepository.findById(req.getProductId())
+            Product product = productRepository.findByIdWithOptimisticLock(req.getProductId())
                     .orElseThrow(()-> {
                         log.warn("[createOrder] 상품 없음 - productId={}", req.getProductId());
                         return new ProductNotFoundException();

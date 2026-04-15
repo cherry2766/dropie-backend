@@ -44,7 +44,15 @@ public enum ErrorCode {
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 태그입니다."),                         // 404
 
     // 배송지
-    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 배송지입니다.");                   // 404
+    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 배송지입니다."),                   // 404
+
+    // 동시성 제어
+    // 503: 락 획득 실패는 입력값 문제가 아니라 서버 부하 상황이므로 SERVICE_UNAVAILABLE 사용
+    //      클라이언트가 "잠시 후 재시도"하도록 유도
+    LOCK_ACQUISITION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "현재 요청이 많습니다. 잠시 후 다시 시도해주세요."),
+
+    // 409: 낙관적 락 재시도 3회 소진 — 재고는 있지만 경쟁에서 계속 밀린 상황
+    ORDER_CONFLICT(HttpStatus.CONFLICT, "주문 처리 중 문제가 발생했습니다. 다시 시도해주세요.");
 
     private final HttpStatus status;
     private final String message;
