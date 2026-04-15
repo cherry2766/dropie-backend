@@ -5,6 +5,7 @@ import com.dropie.domain.order.dto.response.OrderCancelResponse;
 import com.dropie.domain.order.dto.response.OrderCreateResponse;
 import com.dropie.domain.order.dto.response.OrderDetailResponse;
 import com.dropie.domain.order.dto.response.OrderResponse;
+import com.dropie.domain.order.service.CreateOrderUseCase;
 import com.dropie.domain.order.service.OrderService;
 import com.dropie.global.common.PageResponse;
 import com.dropie.global.security.CustomUserDetails;
@@ -25,7 +26,8 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class OrderController {
 
-    private final OrderService orderService;
+    private final OrderService orderService; // 조회/취소 (락 불필요)
+    private final CreateOrderUseCase createOrderUseCase; // 주문 등록 전용 (락 Facade가 주입됨)
 
     // POST /orders — 주문 등록
     // @AuthenticationPrincipal: Security 컨텍스트에서 현재 로그인 유저 꺼냄
@@ -36,7 +38,7 @@ public class OrderController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         log.debug("[POST /orders] userId={}", userDetails.getUser().getId());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(orderService.createOrder(request, userDetails));
+                .body(createOrderUseCase.createOrder(request, userDetails));
     }
 
     // GET /orders/me — 내 주문 목록 조회
