@@ -12,6 +12,8 @@ import com.dropie.domain.product.dto.response.ProductStockResponse;
 import com.dropie.domain.product.repository.ProductRepository;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.exception.custom.ProductNotFoundException;
+import com.dropie.global.s3.S3Service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,8 +28,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class AdminProductServiceTest {
@@ -40,6 +45,9 @@ class AdminProductServiceTest {
 
     @Mock
     private EventRepository eventRepository;
+
+    @Mock
+    private S3Service s3Service;
 
     private Event event;
     private Product product;
@@ -202,5 +210,35 @@ class AdminProductServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("상품 삭제 성공 — 상품 이미지 S3에서 삭제됨")
+    void 상품_삭제_성공_이미지_삭제() {
+        // given
+        Product product = mock(Product.class);
+        given(product.getImageUrl()).willReturn("https://s3.amazonaws.com/images/product.jpg");
+        given(productRepository.findById(1L)).willReturn(Optional.of(product));
+
+        // when
+        adminProductService.deleteProduct(1L);
+
+        // then — S3 삭제 1번, DB 삭제 1번
+        then(s3Service).should().deleteImage("https://s3.amazonaws.com/images/product.jpg");
+        then(productRepository).should().delete(product);
+    }
+
+    @Test
+    @DisplayName("상품 삭제 실패 — 존재하지 않는 상품 삭제 시 ProductNotFoundException 발생")
+    void 상품_삭제_실패_상품_없음() {
+        // given
+        given(productRepository.findById(999L)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> adminProductService.deleteProduct(999L))
+                .isInstanceOf(ProductNotFoundException.class);
+
+        // S3 삭제가 호출되지 않아야 함 — 상품을 찾지 못했으니 이미지도 삭제 불가
+        then(s3Service).should(never()).deleteImage(anyString());
     }
 }

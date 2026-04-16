@@ -8,8 +8,10 @@ import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.repository.EventRepository;
+import com.dropie.domain.product.entity.Product;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.s3.S3Service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,13 +21,17 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class AdminEventServiceTest {
@@ -35,6 +41,9 @@ class AdminEventServiceTest {
 
     @Mock
     private EventRepository eventRepository;
+
+    @Mock
+    private S3Service s3Service;
 
     private Event upcomingEvent;
     private Event openEvent;
@@ -213,6 +222,47 @@ class AdminEventServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.EVENT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("이벤트 삭제 성공 — 상품 이미지와 이벤트 이미지 S3에서 삭제됨")
+    void 이벤트_삭제_성공_이미지_삭제() {
+        // given
+        Product product1 = mock(Product.class);
+        Product product2 = mock(Product.class);
+        given(product1.getImageUrl()).willReturn("https://s3.amazonaws.com/images/p1.jpg");
+        given(product2.getImageUrl()).willReturn("https://s3.amazonaws.com/images/p2.jpg");
+
+        Event event = mock(Event.class);
+        given(event.getProducts()).willReturn(List.of(product1, product2));
+        given(event.getThumbnailImageUrl()).willReturn("https://s3.amazonaws.com/images/thumb.jpg");
+        given(event.getImageUrl()).willReturn("https://s3.amazonaws.com/images/event.jpg");
+        given(eventRepository.findById(1L)).willReturn(Optional.of(event));
+
+        // when
+        adminEventService.deleteEvent(1L);
+
+        // then — 상품 이미지 2개 + 이벤트 이미지 2개 = 총 4번 S3 삭제 호출
+        then(s3Service).should(times(4)).deleteImage(anyString());
+        then(eventRepository).should().delete(event);
+    }
+
+    @Test
+    @DisplayName("이벤트 삭제 성공 — 상품이 없는 경우 이벤트 이미지만 S3에서 삭제됨")
+    void 이벤트_삭제_성공_상품_없음() {
+        // given
+        Event event = mock(Event.class);
+        given(event.getProducts()).willReturn(List.of()); // 상품 없음
+        given(event.getThumbnailImageUrl()).willReturn("https://s3.amazonaws.com/images/thumb.jpg");
+        given(event.getImageUrl()).willReturn("https://s3.amazonaws.com/images/event.jpg");
+        given(eventRepository.findById(1L)).willReturn(Optional.of(event));
+
+        // when
+        adminEventService.deleteEvent(1L);
+
+        // then — 이벤트 이미지 2개만 삭제
+        then(s3Service).should(times(2)).deleteImage(anyString());
+        then(eventRepository).should().delete(event);
     }
 
 }

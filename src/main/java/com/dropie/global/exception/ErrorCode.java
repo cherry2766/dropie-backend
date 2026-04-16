@@ -52,7 +52,10 @@ public enum ErrorCode {
     LOCK_ACQUISITION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "현재 요청이 많습니다. 잠시 후 다시 시도해주세요."),
 
     // 409: 낙관적 락 재시도 3회 소진 — 재고는 있지만 경쟁에서 계속 밀린 상황
-    ORDER_CONFLICT(HttpStatus.CONFLICT, "주문 처리 중 문제가 발생했습니다. 다시 시도해주세요.");
+    ORDER_CONFLICT(HttpStatus.CONFLICT, "주문 처리 중 문제가 발생했습니다. 다시 시도해주세요."),
+
+    // S3
+    S3_UPLOAD_URL_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드 URL 생성에 실패했습니다.");
 
     private final HttpStatus status;
     private final String message;

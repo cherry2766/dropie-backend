@@ -43,7 +43,9 @@ public class Event extends BaseEntity {
     @Column(nullable = false)
     private LocalDateTime endAt;
 
-    @OneToMany(mappedBy = "event")
+    // cascade = CascadeType.ALL: 이벤트 삭제 시 하위 상품도 JPA가 함께 삭제
+    // orphanRemoval = true: 이벤트에서 분리된 상품(고아 객체)도 자동 삭제
+    @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Product> products = new ArrayList<>();
 
     // PATCH 부분 업데이트 — null이면 기존 값 유지

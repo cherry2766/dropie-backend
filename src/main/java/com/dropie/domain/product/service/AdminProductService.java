@@ -12,6 +12,7 @@ import com.dropie.global.exception.custom.EventNotFoundException;
 import com.dropie.global.exception.custom.ProductNotFoundException;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.repository.ProductRepository;
+import com.dropie.global.s3.S3Service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class AdminProductService {
 
     private final ProductRepository productRepository;
     private final EventRepository eventRepository; // 상품 등록 시 이벤트 존재 여부 확인 필요
+    private final S3Service s3Service;
 
     // 상품 등록
     @Transactional
@@ -102,6 +104,9 @@ public class AdminProductService {
                     log.warn("[deleteProduct] 상품 없음 - productId: {}", productId);
                     return new ProductNotFoundException();
                 });
+
+        // DB 삭제 전에 S3 이미지 먼저 삭제
+        s3Service.deleteImage(product.getImageUrl());
 
         productRepository.delete(product);
         log.info("[deleteProduct] 삭제 완료 - productId: {}", productId);
