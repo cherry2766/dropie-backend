@@ -10,6 +10,7 @@ import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
 import com.dropie.global.exception.custom.EventNotFoundException;
 import com.dropie.domain.event.repository.EventRepository;
+import com.dropie.global.s3.S3Service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminEventService {
 
     private final EventRepository eventRepository;
+    private final S3Service s3Service;
 
     // 이벤트 등록
     // status는 항상 UPCOMING으로 고정 — 등록 직후 OPEN이 되면 안 되므로 요청값 무시
@@ -96,6 +98,16 @@ public class AdminEventService {
                     return new EventNotFoundException();
                 });
 
+        // 이벤트에 속한 모든 상품 이미지를 S3에서 먼저 삭제
+        // DB 삭제 전에 해야 imageUrl을 꺼낼 수 있음
+        event.getProducts().forEach(product ->
+                s3Service.deleteImage(product.getImageUrl()));
+
+        // 이벤트 이미지(썸네일 + 상세 이미지) S3에서 삭제
+        s3Service.deleteImage(event.getThumbnailImageUrl());
+        s3Service.deleteImage(event.getImageUrl());
+
+        // DB에서 이벤트 삭제 (cascade로 하위 상품도 자동 삭제)
         eventRepository.delete(event);
         log.info("[deleteEvent] 삭제 완료 - eventId: {}", eventId);
     }
