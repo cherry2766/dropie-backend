@@ -1,4 +1,4 @@
-package com.dropie.global.s3.dto.request;
+package com.dropie.global.s3;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;

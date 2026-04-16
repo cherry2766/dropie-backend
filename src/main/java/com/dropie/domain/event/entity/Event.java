@@ -45,6 +45,9 @@ public class Event extends BaseEntity {
 
     // cascade = CascadeType.ALL: 이벤트 삭제 시 하위 상품도 JPA가 함께 삭제
     // orphanRemoval = true: 이벤트에서 분리된 상품(고아 객체)도 자동 삭제
+    // @Builder.Default: @Builder를 쓰면 필드 초기화(= new ArrayList<>())가 무시되므로
+    //                   이 어노테이션으로 빌더에서도 기본값이 적용되게 명시
+    @Builder.Default
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Product> products = new ArrayList<>();
 

@@ -1,4 +1,4 @@
-package com.dropie.global.s3.dto.response;
+package com.dropie.global.s3;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
