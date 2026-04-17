@@ -6,6 +6,7 @@ import com.dropie.domain.auth.dto.request.LoginRequest;
 import com.dropie.domain.auth.dto.request.SignUpRequest;
 import com.dropie.domain.auth.dto.response.LoginResponse;
 import com.dropie.domain.user.repository.UserRepository;
+import com.dropie.global.email.EmailVerificationService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.security.JwtTokenProvider;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 // @ExtendWith : JUnit5에 확장 기능을 붙이는 어노테이션
 // MockitoExtension.class → "이 테스트 클래스에서 Mockito 사용할게" 라고 선언
@@ -45,6 +47,9 @@ class AuthServiceTest {
 
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+
+    @Mock
+    private EmailVerificationService emailVerificationService;
 
     @Test
     @DisplayName("회원가입 성공")
@@ -72,6 +77,8 @@ class AuthServiceTest {
         // then(모의객체).should().메서드() → 해당 메서드가 실제로 호출됐는지 검증
         // save()가 1번 호출됐어야 정상 → 안 불렸으면 테스트 실패
         then(userRepository).should().save(any(User.class));
+        // 회원가입 성공 시 sendVerificationEmail()이 반드시 1번 호출됐어야 함
+        then(emailVerificationService).should().sendVerificationEmail("test@email.com");
     }
 
     @Test
@@ -156,5 +163,71 @@ class AuthServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    @Test
+    @DisplayName("이메일 인증 성공 - emailVerified가 true로 저장됨")
+    void 이메일_인증_성공() {
+        // given
+        // verifyToken()이 이메일을 반환 → 유효한 토큰이 Redis에 존재하는 정상 케이스
+        given(emailVerificationService.verifyToken("valid-token"))
+                .willReturn("test@email.com");
+
+        // emailVerified 기본값이 false → 미인증 유저 상태
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pw")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+
+        // when
+        authService.verifyEmail("valid-token");
+
+        // then
+        // save()가 호출됐다는 것 = user.verifyEmail()이 불려 emailVerified=true로 바뀐 뒤 저장됐다는 뜻
+        then(userRepository).should().save(user);
+    }
+
+    @Test
+    @DisplayName("이메일 인증 실패 - 만료된 토큰이면 INVALID_VERIFICATION_TOKEN 예외")
+    void 이메일_인증_토큰없음_예외() {
+        // given
+        // verifyToken()이 null 반환 → 토큰이 Redis에 없거나 TTL 만료된 케이스
+        given(emailVerificationService.verifyToken("expired-token"))
+                .willReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> authService.verifyEmail("expired-token"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_VERIFICATION_TOKEN);
+    }
+
+    @Test
+    @DisplayName("이미 인증된 유저가 링크 재클릭 시 save 호출 안 함")
+    void 이미_인증된_유저_재인증_무시() {
+        // given
+        given(emailVerificationService.verifyToken("valid-token"))
+                .willReturn("test@email.com");
+
+        // verifyEmail()을 미리 호출해 emailVerified=true 상태로 만듦
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pw")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+        user.verifyEmail();
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+
+        // when
+        authService.verifyEmail("valid-token");
+
+        // then
+        // 이미 인증된 유저는 save()를 호출하면 안 됨 (불필요한 DB 쓰기 방지)
+        // never() : 한 번도 호출되지 않았어야 한다를 검증하는 Mockito 메서드
+        then(userRepository).should(never()).save(any());
     }
 }

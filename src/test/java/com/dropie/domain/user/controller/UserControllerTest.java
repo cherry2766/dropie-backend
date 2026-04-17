@@ -13,8 +13,13 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -37,6 +42,18 @@ class UserControllerTest {
     // 실제 JWT 동작은 필요 없고 빈 등록만 되면 되므로 Mock으로 대체
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
+    // @WebMvcTest는 Redis를 띄우지 않으므로 Mock으로 등록해야 컨텍스트 로드가 됨
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @BeforeEach
+    void setUp() {
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(null);
+    }
 
     @Test
     @DisplayName("GET /users/me - 성공 시 200과 내 정보 반환")

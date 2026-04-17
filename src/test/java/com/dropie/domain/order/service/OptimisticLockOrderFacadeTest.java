@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -39,9 +41,15 @@ class OptimisticLockOrderFacadeTest {
     private OrderService orderService;
 
     // RedisConfig.redissonClient()가 Redis에 연결 시도하는 걸 방지
-    // @MockBean으로 실제 Bean 대신 Mock이 등록되어 연결 시도 자체를 막음
     @MockitoBean
     private RedissonClient redissonClient;
+
+    // 테스트 환경에서 외부 인프라 없이 컨텍스트 로드 가능하게 Mock 처리
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @MockitoBean
+    private JavaMailSender javaMailSender;
 
     private CustomUserDetails userDetails;
     private CreateOrderRequest request;
