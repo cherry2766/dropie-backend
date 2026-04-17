@@ -38,6 +38,12 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private Role role;
 
+    // 이메일 인증 여부
+    // → 가입 직후 false, 인증 링크 클릭 후 true로 변경
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+
     @OneToMany(mappedBy = "user")
     private List<Order> orders = new ArrayList<>();
 
@@ -46,4 +52,9 @@ public class User extends BaseEntity {
 
     @OneToMany(mappedBy = "user")
     private List<UserPreference> preferences = new ArrayList<>();
+
+    // 이메일 인증 완료 처리 메서드
+    public void verifyEmail() {
+        this.emailVerified = true;
+    }
 }

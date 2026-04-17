@@ -20,7 +20,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +40,14 @@ public class RedisLockConcurrencyTest {
 
     @Autowired private RedisLockOrderFacade redisLockOrderFacade;
     @Autowired private ProductRepository productRepository;
+
+    // RateLimitInterceptor가 필요로 하는 StringRedisTemplate — 실제 Redis 없이 컨텍스트 로드 가능하게 Mock 처리
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    // EmailVerificationService가 필요로 하는 JavaMailSender — 테스트 환경에서 실제 메일 서버 없이 컨텍스트 로드 가능하게 Mock 처리
+    @MockitoBean
+    private JavaMailSender javaMailSender;
     @Autowired private EventRepository eventRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private OrderRepository orderRepository;

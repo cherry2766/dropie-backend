@@ -15,9 +15,15 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -41,6 +47,17 @@ class PreferenceControllerTest {
     // 실제 JWT 동작은 필요 없고 빈 등록만 되면 되므로 Mock으로 대체
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @BeforeEach
+    void setUp() {
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(null);
+    }
 
     @Test
     @DisplayName("POST /users/me/preferences - 성공 시 204 반환")

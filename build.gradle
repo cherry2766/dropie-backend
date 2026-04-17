@@ -43,6 +43,9 @@ dependencies {
 	implementation platform('software.amazon.awssdk:bom:2.42.34')
 	implementation 'software.amazon.awssdk:s3'
 
+	// 이메일 발송을 위한 Spring Mail 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'

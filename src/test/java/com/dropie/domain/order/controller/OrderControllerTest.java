@@ -30,8 +30,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -63,6 +67,16 @@ class OrderControllerTest {
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
+    // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @BeforeEach
+    void setUp() {
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(null);
+    }
 
     // 테스트용 공통 픽스처 헬퍼
 

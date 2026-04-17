@@ -54,8 +54,15 @@ public enum ErrorCode {
     // 409: 낙관적 락 재시도 3회 소진 — 재고는 있지만 경쟁에서 계속 밀린 상황
     ORDER_CONFLICT(HttpStatus.CONFLICT, "주문 처리 중 문제가 발생했습니다. 다시 시도해주세요."),
 
+    // Rate Limit
+    // 429: 짧은 시간 내 과도한 요청 — 서버 부하 방지, 클라이언트가 잠시 후 재시도하도록 유도
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
+
     // S3
-    S3_UPLOAD_URL_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드 URL 생성에 실패했습니다.");
+    S3_UPLOAD_URL_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드 URL 생성에 실패했습니다."),
+
+    // 이메일 인증
+    INVALID_VERIFICATION_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 인증 링크입니다.");
 
     private final HttpStatus status;
     private final String message;

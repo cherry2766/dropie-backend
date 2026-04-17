@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -50,6 +52,14 @@ class OptimisticLockConcurrencyTest {
     // RedisConfig의 RedissonClient Bean이 Redis 연결을 시도하는 걸 방지
     @MockitoBean
     private RedissonClient redissonClient;
+
+    // RateLimitInterceptor가 필요로 하는 StringRedisTemplate — 실제 Redis 없이 컨텍스트 로드 가능하게 Mock 처리
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    // EmailVerificationService가 필요로 하는 JavaMailSender — 테스트 환경에서 실제 메일 서버 없이 컨텍스트 로드 가능하게 Mock 처리
+    @MockitoBean
+    private JavaMailSender javaMailSender;
 
     private static final int INITIAL_STOCK = 50;
     private static final int THREAD_COUNT = 100;

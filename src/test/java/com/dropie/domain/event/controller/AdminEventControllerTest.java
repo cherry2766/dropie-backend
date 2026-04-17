@@ -19,9 +19,14 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.*;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,6 +44,17 @@ class AdminEventControllerTest {
     // SecurityConfig 로드 시 JwtTokenProvider 빈이 필요 — 실제 JWT 동작 불필요, Mock으로 대체
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @BeforeEach
+    void setUp() {
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(null);
+    }
 
     @Test
     @DisplayName("POST /admin/events - 성공 시 201과 생성된 이벤트 반환")
