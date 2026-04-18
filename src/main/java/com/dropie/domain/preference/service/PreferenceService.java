@@ -43,6 +43,7 @@ public class PreferenceService {
 
         // 2. tagIds가 없으면 스킵 (온보딩은 선택 사항)
         if (request.getTagIds() == null || request.getTagIds().isEmpty()) {
+
             log.debug("[savePreferences] tagIds 없음 - 스킵");
             return;
         }

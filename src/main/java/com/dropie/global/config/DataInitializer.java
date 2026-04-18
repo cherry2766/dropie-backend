@@ -1,5 +1,7 @@
 package com.dropie.global.config;
 
+import com.dropie.domain.tag.entity.Tag;
+import com.dropie.domain.tag.repository.TagRepository;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
 import com.dropie.domain.user.repository.UserRepository;
@@ -10,6 +12,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * 앱 실행 시 초기 데이터를 DB에 심어주는 클래스
@@ -26,6 +30,7 @@ import org.springframework.stereotype.Component;
 public class DataInitializer implements ApplicationRunner {
 
     private final UserRepository userRepository;
+    private final TagRepository tagRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${admin.email}")
@@ -40,6 +45,7 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) throws Exception {
         createAdminIfNotExists();
+        createTagsIfNotExists();
     }
 
     /**
@@ -63,5 +69,21 @@ public class DataInitializer implements ApplicationRunner {
 
         userRepository.save(admin);
         log.info("[DataInitializer] 관리자 계정 생성 완료 (email: {})", adminEmail);
+    }
+
+    // 태그가 하나도 없을 때만 삽입 — List.of()로 순서 보장 → ID 1~10 순서대로 할당됨
+    private void createTagsIfNotExists() {
+        if (tagRepository.count() > 0) {
+            log.info("[DataInitializer] 태그 이미 존재 - 생성 건너뜀");
+            return;
+        }
+
+        List<String> tagNames = List.of(
+                "달콤한", "바삭한", "크리미한", "과일", "초콜릿",
+                "녹차", "빵류", "도넛류", "고소한", "시즌한정"
+        );
+
+        tagNames.forEach(name -> tagRepository.save(Tag.builder().name(name).build()));
+        log.info("[DataInitializer] 태그 {}개 생성 완료", tagNames.size());
     }
 }
