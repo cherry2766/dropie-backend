@@ -8,6 +8,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 // JWT 토큰을 만들고, 읽고, 유효한지 검증
 @Component
@@ -15,9 +16,9 @@ public class JwtTokenProvider {
 
     private final SecretKey secretKey;
 
-    //application.properties의 spring.jwt.secret 값을 주입받아서
-    //HMAC-SHA256 서명용 키 객체로 변환
-    public JwtTokenProvider(@Value("${spring.jwt.secret}") String secret) {
+    // application.yml의 jwt.secret 값을 주입받아서
+    // HMAC-SHA256 서명용 키 객체로 변환
+    public JwtTokenProvider(@Value("${jwt.secret}") String secret) {
         secretKey = new SecretKeySpec(
                 secret.getBytes(StandardCharsets.UTF_8),
                 Jwts.SIG.HS256.key().build().getAlgorithm()
@@ -55,5 +56,12 @@ public class JwtTokenProvider {
                 .expiration(new Date(System.currentTimeMillis() + expiredMs))   // 만료 시간
                 .signWith(secretKey)    // 비밀키로 서명
                 .compact();             // 최종 JWT 문자열 생성
+    }
+
+    // Refresh Token 생성
+    // Access Token(JWT)과 달리 Refresh Token은 DB에서 비교 검증하기 때문에
+    // 굳이 JWT 형식으로 만들 필요 없음 → UUID(랜덤 문자열)로 만들면 충분
+    public String generateRefreshToken() {
+        return UUID.randomUUID().toString();
     }
 }

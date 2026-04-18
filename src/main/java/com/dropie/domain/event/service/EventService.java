@@ -7,8 +7,7 @@ import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.dto.response.ProductResponse;
 import com.dropie.domain.product.repository.ProductRepository;
 import com.dropie.global.common.PageResponse;
-import com.dropie.global.exception.BusinessException;
-import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.exception.custom.EventNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -49,7 +48,7 @@ public class EventService {
 
         // 이벤트 조회 — 없으면 404
         Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.EVENT_NOT_FOUND));
+                .orElseThrow(EventNotFoundException::new);
 
         // 해당 이벤트의 상품 목록 페이지네이션 조회
         PageRequest pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.ASC, "id"));
