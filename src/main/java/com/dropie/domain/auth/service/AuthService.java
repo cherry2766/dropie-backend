@@ -124,7 +124,10 @@ public class AuthService {
         setRefreshTokenCookie(response, newRefreshToken);
 
         log.info("[refresh] 토큰 재발급 완료 - userId: {}", user.getId());
-        return LoginResponse.builder().accessToken(newAccessToken).build();
+        return LoginResponse.builder()
+                .accessToken(newAccessToken)
+                .role(user.getRole().name())
+                .build();
     }
 
     // 로그아웃 (POST /auth/logout)
@@ -199,8 +202,10 @@ public class AuthService {
                         )
                 );
         setRefreshTokenCookie(response, refreshToken);
-        return LoginResponse.builder().accessToken(accessToken).build();
-
+        return LoginResponse.builder()
+                .accessToken(accessToken)
+                .role(user.getRole().name())
+                .build();
     }
 
     // Refresh Token을 httpOnly Cookie로 설정

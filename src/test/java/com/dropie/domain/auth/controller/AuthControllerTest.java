@@ -61,7 +61,7 @@ class AuthControllerTest {
         // given
         // signUp은 이제 (SignUpRequest, HttpServletResponse) 2개 인자를 받음
         given(authService.signUp(any(), any()))
-                .willReturn(LoginResponse.builder().accessToken("jwt.token.here").build());
+                .willReturn(LoginResponse.builder().accessToken("jwt.token.here").role("USER").build());
 
         // when & then
         mockMvc.perform(post("/auth/signup")
@@ -74,7 +74,8 @@ class AuthControllerTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.accessToken").value("jwt.token.here"));
+                .andExpect(jsonPath("$.accessToken").value("jwt.token.here"))
+                .andExpect(jsonPath("$.role").value("USER"));
     }
 
     @Test
@@ -170,7 +171,7 @@ class AuthControllerTest {
         // given
         // login도 이제 (LoginRequest, HttpServletResponse) 2개 인자를 받음
         given(authService.login(any(), any()))
-                .willReturn(LoginResponse.builder().accessToken("jwt.token.here").build());
+                .willReturn(LoginResponse.builder().accessToken("jwt.token.here").role("USER").build());
 
         // when & then
         mockMvc.perform(post("/auth/login")
@@ -182,7 +183,8 @@ class AuthControllerTest {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").value("jwt.token.here"));
+                .andExpect(jsonPath("$.accessToken").value("jwt.token.here"))
+                .andExpect(jsonPath("$.role").value("USER"));
     }
 
     @Test
