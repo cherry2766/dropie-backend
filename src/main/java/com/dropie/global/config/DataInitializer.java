@@ -67,6 +67,8 @@ public class DataInitializer implements ApplicationRunner {
                 .role(Role.ADMIN)
                 .build();
 
+        // 관리자 계정은 이메일 인증 링크 없이 생성 시 바로 인증 완료 상태로 설정
+        admin.verifyEmail();
         userRepository.save(admin);
         log.info("[DataInitializer] 관리자 계정 생성 완료 (email: {})", adminEmail);
     }
