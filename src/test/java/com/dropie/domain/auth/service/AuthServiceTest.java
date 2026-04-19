@@ -2,6 +2,7 @@ package com.dropie.domain.auth.service;
 
 import com.dropie.domain.auth.entity.RefreshToken;
 import com.dropie.domain.auth.repository.RefreshTokenRepository;
+import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
 import com.dropie.domain.auth.dto.request.LoginRequest;
@@ -49,6 +50,7 @@ class AuthServiceTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
+    @Mock private UserPreferenceRepository preferenceRepository;
 
     // HttpServletResponse는 Spring 컨텍스트 없이 쓸 수 없어서 Mockito로 직접 mock 생성
     private HttpServletResponse mockResponse;
@@ -115,6 +117,7 @@ class AuthServiceTest {
         given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
         given(jwtTokenProvider.generateRefreshToken()).willReturn("refresh-token");
         given(refreshTokenRepository.findByUser(any())).willReturn(Optional.empty());
+        given(preferenceRepository.existsByUser(any())).willReturn(false);
 
         // when
         LoginResponse response = authService.login(request, mockResponse);
@@ -235,6 +238,7 @@ class AuthServiceTest {
         given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
         given(jwtTokenProvider.generateRefreshToken()).willReturn("refresh-token");
         given(refreshTokenRepository.findByUser(any())).willReturn(Optional.empty());
+        given(preferenceRepository.existsByUser(any())).willReturn(false);
 
         // when
         authService.login(request, mockResponse);
@@ -242,6 +246,94 @@ class AuthServiceTest {
         // then - login_fail 키와 login_block 키 모두 삭제 확인
         then(redisTemplate).should().delete("login_fail:test@email.com");
         then(redisTemplate).should().delete("login_block:test@email.com");
+    }
+
+    // ===================== showOnboarding =====================
+
+    @Test
+    @DisplayName("로그인 성공 - 취향 없고 스킵 안 한 신규 유저는 showOnboarding true")
+    void 로그인_성공_온보딩_노출() {
+        // given
+        LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("강체리")
+                .role(Role.USER)
+                .build();
+
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("pwd1234", "encoded_pwd")).willReturn(true);
+        given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
+        given(jwtTokenProvider.generateRefreshToken()).willReturn("refresh-token");
+        given(refreshTokenRepository.findByUser(any())).willReturn(Optional.empty());
+        // 취향 없음 + 스킵 안 함 → showOnboarding = true
+        given(preferenceRepository.existsByUser(any())).willReturn(false);
+
+        // when
+        LoginResponse response = authService.login(request, mockResponse);
+
+        // then
+        assertThat(response.isShowOnboarding()).isTrue();
+    }
+
+    @Test
+    @DisplayName("로그인 성공 - 취향 있는 유저는 showOnboarding false")
+    void 로그인_성공_취향있으면_온보딩_미노출() {
+        // given
+        LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("강체리")
+                .role(Role.USER)
+                .build();
+
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("pwd1234", "encoded_pwd")).willReturn(true);
+        given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
+        given(jwtTokenProvider.generateRefreshToken()).willReturn("refresh-token");
+        given(refreshTokenRepository.findByUser(any())).willReturn(Optional.empty());
+        // 취향 있음 → showOnboarding = false
+        given(preferenceRepository.existsByUser(any())).willReturn(true);
+
+        // when
+        LoginResponse response = authService.login(request, mockResponse);
+
+        // then
+        assertThat(response.isShowOnboarding()).isFalse();
+    }
+
+    @Test
+    @DisplayName("로그인 성공 - 온보딩 스킵한 유저는 showOnboarding false")
+    void 로그인_성공_스킵한유저_온보딩_미노출() {
+        // given
+        LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("강체리")
+                .role(Role.USER)
+                .build();
+        // 스킵 버튼을 눌러 onboardingSkipped = true 상태
+        user.skipOnboarding();
+
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("pwd1234", "encoded_pwd")).willReturn(true);
+        given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
+        given(jwtTokenProvider.generateRefreshToken()).willReturn("refresh-token");
+        given(refreshTokenRepository.findByUser(any())).willReturn(Optional.empty());
+        // 취향은 없지만 스킵했으므로 → showOnboarding = false
+        given(preferenceRepository.existsByUser(any())).willReturn(false);
+
+        // when
+        LoginResponse response = authService.login(request, mockResponse);
+
+        // then
+        assertThat(response.isShowOnboarding()).isFalse();
     }
 
     // ===================== refresh =====================
@@ -264,6 +356,7 @@ class AuthServiceTest {
         given(refreshToken.getUser()).willReturn(user);
         given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("new-access-token");
         given(jwtTokenProvider.generateRefreshToken()).willReturn("new-refresh-token");
+        // refresh()는 issueTokens()를 거치지 않고 직접 응답을 만들므로 preferenceRepository 미호출
 
         // when
         LoginResponse response = authService.refresh("valid-refresh-token", mockResponse);
