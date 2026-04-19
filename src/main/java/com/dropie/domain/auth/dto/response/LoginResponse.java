@@ -11,4 +11,9 @@ public class LoginResponse {
 
     private String accessToken;
     private String role;
+
+    // 프론트가 온보딩 페이지를 보여줄지 여부
+    // → true: 온보딩으로 이동 / false: 홈으로 이동
+    // → 백엔드에서 hasPreferences + onboardingSkipped 조합해서 계산한 결과값
+    private boolean showOnboarding;
 }

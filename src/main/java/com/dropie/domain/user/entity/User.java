@@ -44,6 +44,18 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private boolean emailVerified = false;
 
+    // 온보딩 스킵 여부
+    // → 스킵 버튼 클릭 시 true로 변경, 이후 로그인부터 온보딩 미노출
+    // → 중간 이탈(창 닫기 등)은 false 유지 → 다음 로그인에 다시 노출
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean onboardingSkipped = false;
+
+    // 온보딩 스킵 처리
+    public void skipOnboarding() {
+        this.onboardingSkipped = true;
+    }
+
     @OneToMany(mappedBy = "user")
     private List<Order> orders = new ArrayList<>();
 

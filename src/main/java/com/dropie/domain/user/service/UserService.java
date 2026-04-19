@@ -1,5 +1,6 @@
 package com.dropie.domain.user.service;
 
+import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.user.entity.User;
 import com.dropie.domain.user.dto.response.UserResponse;
 import com.dropie.global.exception.custom.UserNotFoundException;
@@ -7,6 +8,7 @@ import com.dropie.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserPreferenceRepository preferenceRepository;
 
     public UserResponse getMe(String email) {
         log.debug("[getMe] 조회 요청 - email: {}", email);
@@ -36,5 +39,20 @@ public class UserService {
                 .build();
     }
 
+    @Transactional
+    public void skipOnboarding(String email) {
+        log.debug("[skipOnboarding] 온보딩 스킵 요청 - email: {}", email);
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(UserNotFoundException::new);
+
+        // 이미 스킵했거나 취향이 있으면 무시 (멱등성 보장)
+        if (user.isOnboardingSkipped() || preferenceRepository.existsByUser(user)) {
+            return;
+        }
+
+        user.skipOnboarding();
+        log.info("[skipOnboarding] 온보딩 스킵 완료 - email: {}", email);
+    }
 
 }

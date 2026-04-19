@@ -9,4 +9,8 @@ public interface UserPreferenceRepository extends JpaRepository<UserPreference, 
     // 온보딩 재시도 시 기존 취향 태그 전체 삭제 후 새로 저장하기 위한 메서드
     // → 중복 등록 방지 + 덮어쓰기 가능하게
     void deleteByUser(User user);
+
+    // 해당 유저의 취향 데이터 존재 여부 확인
+    // → AuthService에서 showOnboarding 계산에 사용
+    boolean existsByUser(User user);
 }
