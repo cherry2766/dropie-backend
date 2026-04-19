@@ -61,6 +61,8 @@ public enum ErrorCode {
     // S3
     S3_UPLOAD_URL_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드 URL 생성에 실패했습니다."),
 
+    LOGIN_BLOCKED(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도해주세요."),
+
     // 이메일 인증
     INVALID_VERIFICATION_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 인증 링크입니다.");
 

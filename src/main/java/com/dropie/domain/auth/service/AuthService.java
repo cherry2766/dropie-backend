@@ -1,5 +1,6 @@
 package com.dropie.domain.auth.service;
 
+import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.entity.RefreshToken;
 import com.dropie.domain.auth.repository.RefreshTokenRepository;
 import com.dropie.domain.user.entity.Role;
@@ -14,6 +15,7 @@ import com.dropie.global.exception.custom.UserNotFoundException;
 import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,16 +37,23 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final StringRedisTemplate redisTemplate;
 
     // Access Token 만료: 15분 (밀리초 단위)
     private static final long ACCESS_TOKEN_EXPIRY_MS = 900_000L;
     // Refresh Token 만료: 7일
     private static final int REFRESH_TOKEN_EXPIRY_DAYS = 7;
 
-    // 회원가입 후 바로 JWT 발급
-    // → 가입 즉시 로그인 상태로 서비스 진입 가능
+    private static final String FAIL_PREFIX  = "login_fail:";
+    private static final String BLOCK_PREFIX = "login_block:";
+    private static final int    MAX_FAIL     = 5;
+    private static final Duration BLOCK_TTL  = Duration.ofMinutes(15);
+
+    // 회원가입
+    // → 유저 생성 + 인증 메일 발송만 하고, 토큰은 발급하지 않음
+    // → 이메일 인증 완료 후 로그인해야 서비스 이용 가능
     @Transactional
-    public LoginResponse signUp(SignUpRequest request, HttpServletResponse response) {
+    public SignUpResponse signUp(SignUpRequest request) {
         log.debug("[signUp] 요청 들어옴 - email: {}", request.getEmail());
 
         // 이메일 중복 확인
@@ -53,31 +62,36 @@ public class AuthService {
             throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
         }
 
-        // User 엔티티 생성 (빌더 패턴 사용 - User 클래스에 @Builder 있음)
+        // 유저 생성
+        // → emailVerified는 @Builder.Default로 기본값이 false
+        // → 인증 완료 전까지 emailVerified = false 상태로 DB에 저장됨
         User user = User.builder()
                 .email(request.getEmail())
-                // 비밀번호는 평문으로 저장하면 안 됨 → BCrypt로 암호화해서 저장
                 .password(passwordEncoder.encode(request.getPassword()))
                 .nickname(request.getNickname())
                 .role(Role.USER)
                 .build();
 
         userRepository.save(user);
-        log.info("[signUp] 회원가입 완료 - email: {}, nickname: {}", user.getEmail(), user.getNickname());
+        log.info("[signUp] 유저 생성 완료 (미인증 상태) - email: {}", user.getEmail());
 
-        // 회원가입 후 이메일 인증 메일 발송 (비동기)
-        // → sendVerificationEmail()에 @Async가 붙어 있어 별도 스레드에서 실행됨
-        //   메일 발송 지연이 응답 속도에 영향을 주지 않음
+        // 인증 이메일 발송
+        // → @Async가 붙어 있어 별도 스레드에서 실행됨 (응답 속도에 영향 없음)
         emailVerificationService.sendVerificationEmail(user.getEmail());
 
-        // Access Token + Refresh Token 발급 후 쿠키 설정
-        return issueTokens(user, response);
+        // 토큰 발급 없이 안내 메시지만 반환
+        // → 사용자는 메일 확인 → 링크 클릭 → 인증 완료 → 로그인 순서로 진행
+        return SignUpResponse.builder()
+                .message("인증 이메일을 발송했습니다. 메일을 확인해 주세요.")
+                .email(user.getEmail())
+                .build();
     }
 
     // 로그인
     @Transactional
     public LoginResponse login(LoginRequest request, HttpServletResponse response) {
         log.debug("[login] 요청 들어옴 - email: {}", request.getEmail());
+        checkLoginBlock(request.getEmail());  // 차단 여부 먼저 확인
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> {
@@ -87,8 +101,11 @@ public class AuthService {
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             log.warn("[login] 비밀번호 불일치 - email: {}", request.getEmail());
+            recordLoginFailure(request.getEmail());  // 실패 시 카운트 증가
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
+
+        clearLoginFailure(request.getEmail());  // 성공 시 실패 기록 초기화
 
         log.info("[login] 로그인 성공 - email: {}", user.getEmail());
         return issueTokens(user, response);
@@ -220,5 +237,49 @@ public class AuthService {
                 .build();
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    // 로그인 차단 상태 확인
+    // → login_block 키가 있으면 15분 동안 로그인 불가
+    private void checkLoginBlock(String email) {
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(BLOCK_PREFIX + email))) {
+            throw new BusinessException(ErrorCode.LOGIN_BLOCKED);
+        }
+    }
+
+    // 로그인 실패 처리
+    // → 실패 횟수 증가, 5회 도달 시 차단 키 생성
+    private void recordLoginFailure(String email) {
+        String failKey = FAIL_PREFIX + email;
+        Long count = redisTemplate.opsForValue().increment(failKey);
+        // 실패할 때마다 TTL 갱신 (마지막 실패로부터 15분)
+        redisTemplate.expire(failKey, BLOCK_TTL);
+
+        if (count != null && count >= MAX_FAIL) {
+            redisTemplate.opsForValue().set(BLOCK_PREFIX + email, "1", BLOCK_TTL);
+        }
+    }
+
+    // 로그인 성공 시 실패 기록 초기화
+    private void clearLoginFailure(String email) {
+        redisTemplate.delete(FAIL_PREFIX + email);
+        redisTemplate.delete(BLOCK_PREFIX + email);
+    }
+
+    public void resendVerification(String email) {
+        log.debug("[resendVerification] 재발송 요청 - email: {}", email);
+
+        // 가입된 유저인지 확인 (존재하지 않는 이메일로 요청 방지)
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(UserNotFoundException::new);
+
+        // 이미 인증된 유저가 재발송 요청하는 경우 무시
+        if (user.isEmailVerified()) {
+            log.debug("[resendVerification] 이미 인증된 유저 - email: {}", email);
+            return;
+        }
+
+        emailVerificationService.resendVerificationEmail(email);
+        log.info("[resendVerification] 인증 메일 재발송 완료 - email: {}", email);
     }
 }

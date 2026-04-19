@@ -16,7 +16,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(rateLimitInterceptor)
                 // Rate Limit을 적용할 경로만 지정
-                // → 회원가입, 로그인만 적용 (공격 대상이 되는 인증 엔드포인트)
-                .addPathPatterns("/auth/**");
+                // → login에만 IP 기준 제한 적용
+                .addPathPatterns("/auth/login");
     }
 }

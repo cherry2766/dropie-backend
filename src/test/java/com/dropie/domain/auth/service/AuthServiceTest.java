@@ -7,6 +7,7 @@ import com.dropie.domain.user.entity.User;
 import com.dropie.domain.auth.dto.request.LoginRequest;
 import com.dropie.domain.auth.dto.request.SignUpRequest;
 import com.dropie.domain.auth.dto.response.LoginResponse;
+import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.email.EmailVerificationService;
 import com.dropie.global.exception.BusinessException;
@@ -20,8 +21,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -43,6 +47,8 @@ class AuthServiceTest {
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private EmailVerificationService emailVerificationService;
     @Mock private RefreshTokenRepository refreshTokenRepository;
+    @Mock private StringRedisTemplate redisTemplate;
+    @Mock private ValueOperations<String, String> valueOperations;
 
     // HttpServletResponse는 Spring 컨텍스트 없이 쓸 수 없어서 Mockito로 직접 mock 생성
     private HttpServletResponse mockResponse;
@@ -55,23 +61,21 @@ class AuthServiceTest {
     // ===================== signUp =====================
 
     @Test
-    @DisplayName("회원가입 성공")
+    @DisplayName("회원가입 성공 - 인증 메일 발송 후 안내 메시지 반환")
     void 회원가입_성공() {
         // given
         SignUpRequest request = new SignUpRequest("test@email.com", "pwd1234", "강체리");
 
         given(userRepository.existsByEmail("test@email.com")).willReturn(false);
         given(passwordEncoder.encode("pwd1234")).willReturn("encoded_pwd");
-        given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
-        given(jwtTokenProvider.generateRefreshToken()).willReturn("refresh-token");
-        // 기존 Refresh Token 없음 → 신규 INSERT 경로
-        given(refreshTokenRepository.findByUser(any())).willReturn(Optional.empty());
 
         // when
-        LoginResponse response = authService.signUp(request, mockResponse);
+        // signUp은 이제 HttpServletResponse 파라미터 없음 (토큰 발급 안 하므로)
+        SignUpResponse response = authService.signUp(request);
 
         // then
-        assertThat(response.getAccessToken()).isEqualTo("jwt.token.here");
+        assertThat(response.getMessage()).isEqualTo("인증 이메일을 발송했습니다. 메일을 확인해 주세요.");
+        assertThat(response.getEmail()).isEqualTo("test@email.com");
         then(userRepository).should().save(any(User.class));
         then(emailVerificationService).should().sendVerificationEmail("test@email.com");
     }
@@ -84,40 +88,16 @@ class AuthServiceTest {
         given(userRepository.existsByEmail("test2@email.com")).willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> authService.signUp(request, mockResponse))
+        assertThatThrownBy(() -> authService.signUp(request))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.DUPLICATE_EMAIL);
     }
 
-    @Test
-    @DisplayName("회원가입 성공 시 기존 Refresh Token이 있으면 rotate(UPDATE)됨")
-    void 회원가입_기존_리프레시토큰_있으면_rotate() {
-        // given
-        SignUpRequest request = new SignUpRequest("test@email.com", "pwd1234", "강체리");
-
-        given(userRepository.existsByEmail("test@email.com")).willReturn(false);
-        given(passwordEncoder.encode(anyString())).willReturn("encoded_pwd");
-        given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
-        given(jwtTokenProvider.generateRefreshToken()).willReturn("new-refresh-token");
-
-        // 이미 Refresh Token이 존재하는 상황 (재가입 방어 케이스는 아니지만 rotate 경로 검증)
-        RefreshToken existingToken = mock(RefreshToken.class);
-        given(refreshTokenRepository.findByUser(any())).willReturn(Optional.of(existingToken));
-
-        // when
-        authService.signUp(request, mockResponse);
-
-        // then
-        // 신규 save 대신 rotate(UPDATE)가 호출돼야 함
-        then(existingToken).should().rotate(eq("new-refresh-token"), any(LocalDateTime.class));
-        then(refreshTokenRepository).should(never()).save(any(RefreshToken.class));
-    }
-
     // ===================== login =====================
 
     @Test
-    @DisplayName("로그인 성공")
+    @DisplayName("로그인 성공 - 차단 안 된 상태에서 정상 로그인 후 실패 횟수 초기화")
     void 로그인_성공() {
         // given
         LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
@@ -128,6 +108,8 @@ class AuthServiceTest {
                 .role(Role.USER)
                 .build();
 
+        // 차단 상태 아님 (login_block 키 없음)
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
         given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
         given(passwordEncoder.matches("pwd1234", "encoded_pwd")).willReturn(true);
         given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
@@ -139,6 +121,9 @@ class AuthServiceTest {
 
         // then
         assertThat(response.getAccessToken()).isEqualTo("jwt.token.here");
+        // 로그인 성공 시 실패 횟수 키 + 차단 키 모두 삭제돼야 함
+        then(redisTemplate).should().delete("login_fail:test@email.com");
+        then(redisTemplate).should().delete("login_block:test@email.com");
     }
 
     @Test
@@ -146,6 +131,7 @@ class AuthServiceTest {
     void 로그인_이메일없음_예외() {
         // given
         LoginRequest request = new LoginRequest("test3@email.com", "pwd456");
+        given(redisTemplate.hasKey("login_block:test3@email.com")).willReturn(false);
         given(userRepository.findByEmail("test3@email.com")).willReturn(Optional.empty());
 
         // when & then
@@ -156,7 +142,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("로그인 실패 - 비밀번호 틀림")
+    @DisplayName("로그인 실패 - 비밀번호 틀림 (1회 실패, 미차단)")
     void 로그인_비밀번호틀림_예외() {
         // given
         LoginRequest request = new LoginRequest("test@email.com", "wrongPw");
@@ -167,14 +153,95 @@ class AuthServiceTest {
                 .role(Role.USER)
                 .build();
 
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
         given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
         given(passwordEncoder.matches("wrongPw", "encoded_pwd")).willReturn(false);
+        // 1회 실패 → MAX_FAIL(5)에 미달이므로 차단 키 생성 안 됨
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.increment("login_fail:test@email.com")).willReturn(1L);
 
         // when & then
         assertThatThrownBy(() -> authService.login(request, mockResponse))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    @Test
+    @DisplayName("로그인 실패 - 차단된 계정이면 LOGIN_BLOCKED 예외")
+    void 로그인_차단_상태면_LOGIN_BLOCKED_예외() {
+        // given
+        // login_block 키가 Redis에 존재 → 15분 차단 상태
+        LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(true);
+
+        // when & then
+        // 차단 상태면 비밀번호 확인도 하지 않고 즉시 예외
+        assertThatThrownBy(() -> authService.login(request, mockResponse))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.LOGIN_BLOCKED);
+    }
+
+    @Test
+    @DisplayName("로그인 5회 실패 시 차단 키 생성 - 이후 15분간 로그인 불가")
+    void 로그인_5회_실패_시_차단키_생성() {
+        // given
+        LoginRequest request = new LoginRequest("test@email.com", "wrongPw");
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("강포도")
+                .role(Role.USER)
+                .build();
+
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("wrongPw", "encoded_pwd")).willReturn(false);
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        // 5번째 실패 → MAX_FAIL(5) 도달 → 차단 키 생성 트리거
+        given(valueOperations.increment("login_fail:test@email.com")).willReturn(5L);
+
+        // when & then
+        assertThatThrownBy(() -> authService.login(request, mockResponse))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+
+        // 5회 도달 시 login_block 키가 생성됐는지 확인 (TTL 15분)
+        then(valueOperations).should().set(
+                eq("login_block:test@email.com"),
+                eq("1"),
+                eq(Duration.ofMinutes(15))
+        );
+    }
+
+    @Test
+    @DisplayName("로그인 성공 시 실패 횟수 초기화 - 이전 실패 기록이 남아있어도 성공하면 삭제")
+    void 로그인_성공_시_실패횟수_초기화() {
+        // given
+        // 4번 실패했다가 5번째에 성공하는 시나리오
+        LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("강체리")
+                .role(Role.USER)
+                .build();
+
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("pwd1234", "encoded_pwd")).willReturn(true);
+        given(jwtTokenProvider.createToken(anyString(), anyString(), anyLong())).willReturn("jwt.token.here");
+        given(jwtTokenProvider.generateRefreshToken()).willReturn("refresh-token");
+        given(refreshTokenRepository.findByUser(any())).willReturn(Optional.empty());
+
+        // when
+        authService.login(request, mockResponse);
+
+        // then - login_fail 키와 login_block 키 모두 삭제 확인
+        then(redisTemplate).should().delete("login_fail:test@email.com");
+        then(redisTemplate).should().delete("login_block:test@email.com");
     }
 
     // ===================== refresh =====================
@@ -259,14 +326,10 @@ class AuthServiceTest {
     @Test
     @DisplayName("로그아웃 - 쿠키가 없어도 예외 없이 정상 처리")
     void 로그아웃_토큰없이_호출() {
-        // given
-        // refreshTokenValue가 null인 경우 (쿠키 없이 로그아웃 요청)
-
         // when
         authService.logout(null, mockResponse);
 
-        // then
-        // null이면 DB 조회 자체를 하면 안 됨
+        // then - null이면 DB 조회 자체를 하면 안 됨
         then(refreshTokenRepository).should(never()).findByToken(any());
     }
 
