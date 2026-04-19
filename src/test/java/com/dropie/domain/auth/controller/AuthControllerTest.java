@@ -1,6 +1,7 @@
 package com.dropie.domain.auth.controller;
 
 import com.dropie.domain.auth.dto.response.LoginResponse;
+import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.service.AuthService;
 import com.dropie.global.config.SecurityConfig;
 import com.dropie.global.exception.BusinessException;
@@ -56,12 +57,15 @@ class AuthControllerTest {
     // ===================== signUp =====================
 
     @Test
-    @DisplayName("POST /auth/signup - 성공 시 201과 accessToken 반환")
+    @DisplayName("POST /auth/signup - 성공 시 201과 안내 메시지 반환")
     void 회원가입_API_성공() throws Exception {
         // given
-        // signUp은 이제 (SignUpRequest, HttpServletResponse) 2개 인자를 받음
-        given(authService.signUp(any(), any()))
-                .willReturn(LoginResponse.builder().accessToken("jwt.token.here").role("USER").build());
+        // signUp은 HttpServletResponse 파라미터 없음 (토큰 발급 안 하므로)
+        given(authService.signUp(any()))
+                .willReturn(SignUpResponse.builder()
+                        .message("인증 이메일을 발송했습니다. 메일을 확인해 주세요.")
+                        .email("test@email.com")
+                        .build());
 
         // when & then
         mockMvc.perform(post("/auth/signup")
@@ -74,15 +78,15 @@ class AuthControllerTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.accessToken").value("jwt.token.here"))
-                .andExpect(jsonPath("$.role").value("USER"));
+                .andExpect(jsonPath("$.message").value("인증 이메일을 발송했습니다. 메일을 확인해 주세요."))
+                .andExpect(jsonPath("$.email").value("test@email.com"));
     }
 
     @Test
     @DisplayName("POST /auth/signup - 이메일 중복 시 409 반환")
     void 회원가입_API_중복이메일_실패() throws Exception {
         // given
-        given(authService.signUp(any(), any()))
+        given(authService.signUp(any()))
                 .willThrow(new BusinessException(ErrorCode.DUPLICATE_EMAIL));
 
         // when & then
@@ -169,7 +173,7 @@ class AuthControllerTest {
     @DisplayName("POST /auth/login - 성공 시 200과 accessToken 반환")
     void 로그인_API_성공() throws Exception {
         // given
-        // login도 이제 (LoginRequest, HttpServletResponse) 2개 인자를 받음
+        // (LoginRequest, HttpServletResponse) 2개 인자를 받음
         given(authService.login(any(), any()))
                 .willReturn(LoginResponse.builder().accessToken("jwt.token.here").role("USER").build());
 
@@ -290,31 +294,71 @@ class AuthControllerTest {
                 .andExpect(status().isNoContent());
     }
 
+    // ===================== resendVerification =====================
+
+    @Test
+    @DisplayName("POST /auth/resend-verification - 성공 시 200 반환")
+    void 인증메일_재발송_성공() throws Exception {
+        // given
+        willDoNothing().given(authService).resendVerification(anyString());
+
+        // when & then
+        mockMvc.perform(post("/auth/resend-verification")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "email": "test@email.com"
+                                }
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("POST /auth/resend-verification - 쿨타임 내 재요청 시 429 반환")
+    void 인증메일_재발송_쿨타임_초과() throws Exception {
+        // given
+        // EmailVerificationService에서 TOO_MANY_REQUESTS를 던지고 AuthService가 그대로 전파
+        willThrow(new BusinessException(ErrorCode.TOO_MANY_REQUESTS))
+                .given(authService).resendVerification(anyString());
+
+        // when & then
+        mockMvc.perform(post("/auth/resend-verification")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "email": "test@email.com"
+                                }
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"));
+    }
+
     // ===================== verifyEmail =====================
 
     @Test
-    @DisplayName("GET /auth/verify-email - 유효한 토큰이면 200 반환")
+    @DisplayName("GET /auth/verify-email - 유효한 토큰이면 프론트 완료 페이지로 302 리다이렉트")
     void 이메일_인증_성공() throws Exception {
         // given
         willDoNothing().given(authService).verifyEmail(anyString());
 
         // when & then
+        // verifyEmail은 ResponseEntity 대신 sendRedirect()를 사용하므로 302 응답
         mockMvc.perform(get("/auth/verify-email")
                         .param("token", "valid-token"))
-                .andExpect(status().isOk());
+                .andExpect(status().is3xxRedirection());
     }
 
     @Test
-    @DisplayName("GET /auth/verify-email - 만료된 토큰이면 400 반환")
+    @DisplayName("GET /auth/verify-email - 만료된 토큰이면 프론트 실패 페이지로 302 리다이렉트")
     void 이메일_인증_만료_토큰() throws Exception {
         // given
+        // 예외가 발생해도 컨트롤러에서 catch 후 실패 URL로 리다이렉트하므로 302
         willThrow(new BusinessException(ErrorCode.INVALID_VERIFICATION_TOKEN))
                 .given(authService).verifyEmail(anyString());
 
         // when & then
         mockMvc.perform(get("/auth/verify-email")
                         .param("token", "expired-token"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_VERIFICATION_TOKEN"));
+                .andExpect(status().is3xxRedirection());
     }
 }

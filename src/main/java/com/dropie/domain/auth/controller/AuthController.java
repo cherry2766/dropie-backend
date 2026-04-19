@@ -1,8 +1,10 @@
 package com.dropie.domain.auth.controller;
 
 import com.dropie.domain.auth.dto.request.LoginRequest;
+import com.dropie.domain.auth.dto.request.ResendVerificationRequest;
 import com.dropie.domain.auth.dto.request.SignUpRequest;
 import com.dropie.domain.auth.dto.response.LoginResponse;
+import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.service.AuthService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
@@ -15,6 +17,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+
 @Slf4j
 @RestController
 @RequestMapping("/auth")
@@ -25,14 +29,13 @@ public class AuthController {
     private final AuthService authService;
 
     // 회원가입 API
-    // HttpServletResponse를 받는 이유:
-    // → 서비스에서 Refresh Token을 Cookie로 설정할 때 response 객체에 직접 헤더를 추가해야 하기 때문
+    // → HttpServletResponse 파라미터 제거: 쿠키 설정이 필요 없기 때문
+    // → 반환 타입: LoginResponse → SignUpResponse (토큰 없이 메시지만 반환)
     @PostMapping("/signup")
-    public ResponseEntity<LoginResponse> signup(
-            @RequestBody @Valid SignUpRequest request,
-            HttpServletResponse response) {
-        LoginResponse loginResponse = authService.signUp(request, response);
-        return ResponseEntity.status(HttpStatus.CREATED).body(loginResponse);
+    public ResponseEntity<SignUpResponse> signup(
+            @RequestBody @Valid SignUpRequest request) {
+        SignUpResponse response = authService.signUp(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // 로그인 API
@@ -69,10 +72,31 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    // 이메일 인증
+    // 이메일 인증 링크 처리 API
+    // → 사용자가 메일 링크 클릭 시 이 API가 호출됨
+    // → 토큰 검증 후 프론트 완료 페이지로 리다이렉트
+    //
+    // ResponseEntity 대신 void + HttpServletResponse를 직접 쓰는 이유:
+    // → sendRedirect()는 HTTP 302 응답을 직접 쓰는 저수준 방식
+    // → ResponseEntity를 리턴하면 Spring이 응답을 한 번 더 감싸서 충돌 발생 가능
+    // → 이런 경우엔 response 객체를 직접 조작하는 것이 실무 관례
     @GetMapping("/verify-email")
-    public ResponseEntity<Void> verifyEmail(@RequestParam String token) {
-        authService.verifyEmail(token);
+    public void verifyEmail(
+            @RequestParam String token,
+            HttpServletResponse response) throws IOException {
+        try {
+            authService.verifyEmail(token);
+            // 인증 성공 → 프론트 완료 페이지로 이동
+            response.sendRedirect("http://localhost:5173/signup-complete?success=true");
+        } catch (BusinessException e) {
+            // 인증 실패 (토큰 만료 or 잘못된 토큰) → 실패 화면으로 이동
+            response.sendRedirect("http://localhost:5173/signup-complete?success=false");
+        }
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Void> resendVerification(@RequestBody @Valid ResendVerificationRequest request) {
+        authService.resendVerification(request.getEmail());
         return ResponseEntity.ok().build();
     }
 }
