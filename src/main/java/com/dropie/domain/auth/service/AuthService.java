@@ -3,6 +3,7 @@ package com.dropie.domain.auth.service;
 import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.entity.RefreshToken;
 import com.dropie.domain.auth.repository.RefreshTokenRepository;
+import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
 import com.dropie.domain.auth.dto.request.LoginRequest;
@@ -38,6 +39,7 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final StringRedisTemplate redisTemplate;
+    private final UserPreferenceRepository preferenceRepository;
 
     // Access Token 만료: 15분 (밀리초 단위)
     private static final long ACCESS_TOKEN_EXPIRY_MS = 900_000L;
@@ -196,7 +198,6 @@ public class AuthService {
     }
 
     // Access Token + Refresh Token 발급 + Refresh Token을 쿠키로 설정
-    // login, signUp 양쪽에서 공통으로 사용하기 위해 분리
     private LoginResponse issueTokens(User user, HttpServletResponse response) {
         String accessToken = jwtTokenProvider.createToken(
                 user.getEmail(), user.getRole().name(), ACCESS_TOKEN_EXPIRY_MS
@@ -219,9 +220,15 @@ public class AuthService {
                         )
                 );
         setRefreshTokenCookie(response, refreshToken);
+
+        // 취향 데이터가 없고 스킵도 안 했으면 온보딩 노출
+        boolean hasPreferences = preferenceRepository.existsByUser(user);
+        boolean showOnboarding = !hasPreferences && !user.isOnboardingSkipped();
+
         return LoginResponse.builder()
                 .accessToken(accessToken)
                 .role(user.getRole().name())
+                .showOnboarding(showOnboarding)
                 .build();
     }
 
