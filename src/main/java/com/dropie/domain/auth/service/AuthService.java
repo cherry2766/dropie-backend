@@ -14,6 +14,7 @@ import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.exception.custom.UserNotFoundException;
 import com.dropie.domain.user.repository.UserRepository;
+import com.dropie.global.exception.custom.UserWithdrawnException;
 import com.dropie.global.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -100,6 +101,13 @@ public class AuthService {
                     log.warn("[login] 존재하지 않는 이메일 - email: {}", request.getEmail());
                     return new BusinessException(ErrorCode.INVALID_CREDENTIALS);
                 });
+
+        // 탈퇴한 계정 확인
+        // → deletedAt이 null이 아니면 소프트 딜리트된 유저 → 로그인 차단
+        if (user.getDeletedAt() != null) {
+            log.warn("[login] 탈퇴한 계정 로그인 시도 - email: {}", request.getEmail());
+            throw new UserWithdrawnException();
+        }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             log.warn("[login] 비밀번호 불일치 - email: {}", request.getEmail());

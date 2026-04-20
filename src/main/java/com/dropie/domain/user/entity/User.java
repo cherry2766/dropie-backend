@@ -51,11 +51,6 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private boolean onboardingSkipped = false;
 
-    // 온보딩 스킵 처리
-    public void skipOnboarding() {
-        this.onboardingSkipped = true;
-    }
-
     @OneToMany(mappedBy = "user")
     private List<Order> orders = new ArrayList<>();
 
@@ -68,5 +63,17 @@ public class User extends BaseEntity {
     // 이메일 인증 완료 처리 메서드
     public void verifyEmail() {
         this.emailVerified = true;
+    }
+
+    // 온보딩 스킵 처리
+    public void skipOnboarding() {
+        this.onboardingSkipped = true;
+    }
+
+    // 회원 탈퇴 처리 메서드
+    // → DB에서 행을 삭제하지 않고 deletedAt에 현재 시간을 기록하는 소프트 딜리트 방식
+    // → 탈퇴 후에도 주문/이력 데이터를 보존할 수 있고, 실수로 탈퇴한 경우 복구도 가능
+    public void withdraw() {
+        this.deletedAt = LocalDateTime.now();
     }
 }

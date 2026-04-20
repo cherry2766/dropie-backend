@@ -13,6 +13,7 @@ import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.email.EmailVerificationService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.exception.custom.UserWithdrawnException;
 import com.dropie.global.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -273,6 +274,29 @@ class AuthServiceTest {
         // then - login_fail 키와 login_block 키 모두 삭제 확인
         then(redisTemplate).should().delete("login_fail:test@email.com");
         then(redisTemplate).should().delete("login_block:test@email.com");
+    }
+
+    @Test
+    @DisplayName("로그인 실패 - 탈퇴한 계정이면 UserWithdrawnException")
+    void 로그인_탈퇴한계정_예외() {
+        // given: 탈퇴 처리된 유저 (deletedAt != null)
+        User withdrawnUser = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+        withdrawnUser.withdraw(); // deletedAt 세팅
+
+        LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
+
+        // 차단 체크: 차단 상태 아님
+        given(redisTemplate.hasKey(anyString())).willReturn(false);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(withdrawnUser));
+
+        // when & then
+        assertThatThrownBy(() -> authService.login(request, mockResponse))
+                .isInstanceOf(UserWithdrawnException.class);
     }
 
     // ===================== showOnboarding =====================

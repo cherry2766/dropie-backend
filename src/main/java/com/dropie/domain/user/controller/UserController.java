@@ -2,16 +2,18 @@ package com.dropie.domain.user.controller;
 
 import com.dropie.domain.user.dto.response.UserResponse;
 import com.dropie.domain.user.service.UserService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -41,5 +43,35 @@ public class UserController {
             @AuthenticationPrincipal String email) {
         userService.skipOnboarding(email);
         return ResponseEntity.ok().build();
+    }
+
+    // 회원 탈퇴 API
+    // DELETE /users/me
+    // Header: Authorization: Bearer {액세스토큰}
+    // Cookie: refreshToken={리프레시토큰}
+    // Response: 204 No Content
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> withdraw(
+            @AuthenticationPrincipal String email,
+            HttpServletResponse response) {
+
+        log.debug("[DELETE /users/me] 탈퇴 요청 - email: {}", email);
+
+        // 유저 소프트 딜리트 + DB에서 Refresh Token 삭제
+        userService.withdraw(email);
+
+        // 쿠키 즉시 만료 처리
+        // → maxAge(0) : 브라우저가 응답 받는 즉시 쿠키를 삭제함
+        // → 로그아웃과 동일한 방식 — 클라이언트 쪽 인증 상태도 함께 초기화
+        ResponseCookie expired = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(false) // 로컬 개발용, 배포 시 true로 변경
+                .path("/auth")
+                .maxAge(0)
+                .sameSite("Strict")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, expired.toString());
+
+        return ResponseEntity.noContent().build();
     }
 }
