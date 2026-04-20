@@ -1,11 +1,11 @@
 package com.dropie.domain.auth.controller;
 
-import com.dropie.domain.auth.dto.request.LoginRequest;
-import com.dropie.domain.auth.dto.request.ResendVerificationRequest;
-import com.dropie.domain.auth.dto.request.SignUpRequest;
+import com.dropie.domain.auth.dto.request.*;
 import com.dropie.domain.auth.dto.response.LoginResponse;
+import com.dropie.domain.auth.dto.response.PasswordResetResponse;
 import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.service.AuthService;
+import com.dropie.global.email.PasswordResetService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,6 +27,7 @@ import java.io.IOException;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
     // 회원가입 API
     // → HttpServletResponse 파라미터 제거: 쿠키 설정이 필요 없기 때문
@@ -98,5 +99,27 @@ public class AuthController {
     public ResponseEntity<Void> resendVerification(@RequestBody @Valid ResendVerificationRequest request) {
         authService.resendVerification(request.getEmail());
         return ResponseEntity.ok().build();
+    }
+
+    // 비밀번호 재설정 메일 발송 API
+    // → 이메일이 존재하지 않아도 항상 200 응답 (이메일 열거 공격 방지)
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<PasswordResetResponse> requestPasswordReset(
+            @RequestBody @Valid PasswordResetRequest request) {
+        passwordResetService.requestPasswordReset(request.getEmail());
+        return ResponseEntity.ok(PasswordResetResponse.builder()
+                .message("비밀번호 재설정 메일을 발송했습니다. 메일함을 확인해 주세요.")
+                .build());
+    }
+
+    // 새 비밀번호 설정 API
+    // → 프론트에서 토큰(URL 파라미터)과 새 비밀번호를 함께 전송
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<PasswordResetResponse> resetPassword(
+            @RequestBody @Valid PasswordResetConfirmRequest request) {
+        passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(PasswordResetResponse.builder()
+                .message("비밀번호가 성공적으로 변경되었습니다.")
+                .build());
     }
 }
