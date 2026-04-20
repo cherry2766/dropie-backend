@@ -108,6 +108,7 @@ class AuthServiceTest {
                 .password("encoded_pwd")
                 .nickname("강체리")
                 .role(Role.USER)
+                .emailVerified(true)
                 .build();
 
         // 차단 상태 아님 (login_block 키 없음)
@@ -142,6 +143,31 @@ class AuthServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    @Test
+    @DisplayName("로그인 실패 - 이메일 인증 미완료")
+    void 이메일_미인증_로그인_예외() {
+        // given
+        LoginRequest request = new LoginRequest("test@email.com", "pwd1234");
+        // emailVerified 기본값이 false이므로 별도 설정 없이 미인증 상태
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("강체리")
+                .role(Role.USER)
+                .build();
+
+        given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("pwd1234", "encoded_pwd")).willReturn(true);
+
+        // when & then
+        // 비밀번호는 맞지만 이메일 인증을 안 했으면 로그인 차단
+        assertThatThrownBy(() -> authService.login(request, mockResponse))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.EMAIL_NOT_VERIFIED);
     }
 
     @Test
@@ -230,6 +256,7 @@ class AuthServiceTest {
                 .password("encoded_pwd")
                 .nickname("강체리")
                 .role(Role.USER)
+                .emailVerified(true)
                 .build();
 
         given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
@@ -260,6 +287,7 @@ class AuthServiceTest {
                 .password("encoded_pwd")
                 .nickname("강체리")
                 .role(Role.USER)
+                .emailVerified(true)
                 .build();
 
         given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
@@ -288,6 +316,7 @@ class AuthServiceTest {
                 .password("encoded_pwd")
                 .nickname("강체리")
                 .role(Role.USER)
+                .emailVerified(true)
                 .build();
 
         given(redisTemplate.hasKey("login_block:test@email.com")).willReturn(false);
@@ -316,6 +345,7 @@ class AuthServiceTest {
                 .password("encoded_pwd")
                 .nickname("강체리")
                 .role(Role.USER)
+                .emailVerified(true)
                 .build();
         // 스킵 버튼을 눌러 onboardingSkipped = true 상태
         user.skipOnboarding();

@@ -107,6 +107,12 @@ public class AuthService {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
 
+        // 이메일 인증을 완료해야만 로그인 허용 — 미인증 유저가 API 직접 호출로 우회하는 것도 차단
+        if (!user.isEmailVerified()) {
+            log.warn("[login] 이메일 미인증 유저 로그인 시도 - email: {}", user.getEmail());
+            throw new BusinessException(ErrorCode.EMAIL_NOT_VERIFIED);
+        }
+
         clearLoginFailure(request.getEmail());  // 성공 시 실패 기록 초기화
 
         log.info("[login] 로그인 성공 - email: {}", user.getEmail());
