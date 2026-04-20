@@ -70,6 +70,12 @@ public class User extends BaseEntity {
         this.onboardingSkipped = true;
     }
 
+    // 비밀번호 재설정 시 호출 — 이미 암호화된 값을 받아서 교체
+    // PasswordEncoder.encode()는 서비스 레이어에서 처리하고 여기서는 단순 교체만 담당
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
     // 회원 탈퇴 처리 메서드
     // → DB에서 행을 삭제하지 않고 deletedAt에 현재 시간을 기록하는 소프트 딜리트 방식
     // → 탈퇴 후에도 주문/이력 데이터를 보존할 수 있고, 실수로 탈퇴한 경우 복구도 가능

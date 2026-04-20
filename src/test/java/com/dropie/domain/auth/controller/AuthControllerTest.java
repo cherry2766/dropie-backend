@@ -1,9 +1,11 @@
 package com.dropie.domain.auth.controller;
 
 import com.dropie.domain.auth.dto.response.LoginResponse;
+import com.dropie.domain.auth.dto.response.PasswordResetResponse;
 import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.service.AuthService;
 import com.dropie.global.config.SecurityConfig;
+import com.dropie.global.email.PasswordResetService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.security.JwtTokenProvider;
@@ -38,6 +40,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private PasswordResetService passwordResetService;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -360,5 +365,96 @@ class AuthControllerTest {
         mockMvc.perform(get("/auth/verify-email")
                         .param("token", "expired-token"))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    // ===================== password-reset/request =====================
+
+    @Test
+    @DisplayName("POST /auth/password-reset/request - 성공 시 200과 안내 메시지 반환")
+    void 비밀번호_재설정_요청_성공() throws Exception {
+        // given
+        // requestPasswordReset은 void → 이메일 존재 여부 무관하게 200 반환
+        willDoNothing().given(passwordResetService).requestPasswordReset(anyString());
+
+        // when & then
+        mockMvc.perform(post("/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "email": "test@email.com"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("비밀번호 재설정 메일을 발송했습니다. 메일함을 확인해 주세요."));
+    }
+
+    @Test
+    @DisplayName("POST /auth/password-reset/request - 이메일 형식 오류면 400 반환")
+    void 비밀번호_재설정_요청_이메일_형식오류() throws Exception {
+        mockMvc.perform(post("/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "email": "이메일아님"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    // ===================== password-reset/confirm =====================
+
+    @Test
+    @DisplayName("POST /auth/password-reset/confirm - 성공 시 200과 완료 메시지 반환")
+    void 비밀번호_재설정_확인_성공() throws Exception {
+        // given
+        willDoNothing().given(passwordResetService).resetPassword(anyString(), anyString());
+
+        // when & then
+        mockMvc.perform(post("/auth/password-reset/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "token": "valid-token",
+                                    "newPassword": "newPwd1234"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("비밀번호가 성공적으로 변경되었습니다."));
+    }
+
+    @Test
+    @DisplayName("POST /auth/password-reset/confirm - 토큰 없거나 만료됐으면 400 반환")
+    void 비밀번호_재설정_확인_토큰_무효() throws Exception {
+        // given
+        willThrow(new BusinessException(ErrorCode.PASSWORD_RESET_TOKEN_INVALID))
+                .given(passwordResetService).resetPassword(anyString(), anyString());
+
+        // when & then
+        mockMvc.perform(post("/auth/password-reset/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "token": "expired-token",
+                                    "newPassword": "newPwd1234"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PASSWORD_RESET_TOKEN_INVALID"));
+    }
+
+    @Test
+    @DisplayName("POST /auth/password-reset/confirm - 비밀번호 형식 오류면 400 반환 (8자 미만)")
+    void 비밀번호_재설정_확인_비밀번호_형식오류() throws Exception {
+        mockMvc.perform(post("/auth/password-reset/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "token": "valid-token",
+                                    "newPassword": "pwd1"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 }

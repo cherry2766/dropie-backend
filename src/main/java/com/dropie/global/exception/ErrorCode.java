@@ -66,8 +66,14 @@ public enum ErrorCode {
 
     // 이메일 인증
     INVALID_VERIFICATION_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 인증 링크입니다."),
+
     // 이메일 인증을 완료하지 않으면 로그인 자체를 막아 "인증 = 가입 완료" 흐름을 강제
-    EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요.");
+    EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요."),
+
+    // 비밀번호 재설정
+    // 토큰이 없거나(만료 포함) 유효하지 않을 때 동일한 에러로 처리
+    // → 만료 vs 위조를 구분하면 공격자에게 힌트가 될 수 있으므로 하나로 통일
+    PASSWORD_RESET_TOKEN_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 링크입니다.");
 
     private final HttpStatus status;
     private final String message;
