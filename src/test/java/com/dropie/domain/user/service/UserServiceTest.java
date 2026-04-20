@@ -1,5 +1,7 @@
 package com.dropie.domain.user.service;
 
+import com.dropie.domain.auth.entity.RefreshToken;
+import com.dropie.domain.auth.repository.RefreshTokenRepository;
 import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
@@ -7,6 +9,7 @@ import com.dropie.domain.user.dto.response.UserResponse;
 import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.exception.custom.UserNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,7 +20,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 
 // Spring Context를 띄우지 않고 Mockito만으로 서비스 로직 단위 테스트
 // → 빠르고 DB/외부 의존성 없이 순수 비즈니스 로직만 검증
@@ -34,6 +41,9 @@ class UserServiceTest {
 
     @Mock
     private UserPreferenceRepository preferenceRepository;
+
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Test
     @DisplayName("내 정보 조회 성공")
@@ -151,5 +161,90 @@ class UserServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    // ===================== withdraw =====================
+
+    @Test
+    @DisplayName("회원 탈퇴 성공 - deletedAt 설정되고 RefreshToken 삭제됨")
+    void 회원_탈퇴_성공() {
+        // given
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+
+        // RefreshToken은 내부 상태를 검사할 필요 없으므로 mock으로 대체
+        RefreshToken refreshToken = mock(RefreshToken.class);
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(refreshTokenRepository.findByUser(user)).willReturn(Optional.of(refreshToken));
+
+        // when
+        userService.withdraw("test@email.com");
+
+        // then
+        // deletedAt이 null이 아니어야 함 (소프트 딜리트 확인)
+        assertThat(user.getDeletedAt()).isNotNull();
+        // Refresh Token 삭제가 호출됐는지 확인
+        then(refreshTokenRepository).should().delete(refreshToken);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 실패 - 존재하지 않는 유저면 UserNotFoundException")
+    void 회원_탈퇴_유저없음_예외() {
+        // given
+        given(userRepository.findByEmail("ghost@email.com")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> userService.withdraw("ghost@email.com"))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - 이미 탈퇴한 유저 재요청 시 무시 (멱등성 보장)")
+    void 회원_탈퇴_이미탈퇴한유저_무시() {
+        // given: 이미 탈퇴 처리된 유저 (withdraw() 호출로 deletedAt 설정)
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+        user.withdraw(); // deletedAt 세팅
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+
+        // when - 예외 없이 조용히 종료되어야 함
+        assertThatCode(() -> userService.withdraw("test@email.com"))
+                .doesNotThrowAnyException();
+
+        // then - RT 삭제 호출 안 됨 (이미 탈퇴 처리된 유저이므로)
+        then(refreshTokenRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - RefreshToken이 없어도 정상 처리 (RT 없이 탈퇴 가능)")
+    void 회원_탈퇴_RT없어도_성공() {
+        // given: RT가 없는 유저 (ex. 자동 만료로 이미 삭제된 상태)
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(refreshTokenRepository.findByUser(user)).willReturn(Optional.empty());
+
+        // when
+        userService.withdraw("test@email.com");
+
+        // then
+        assertThat(user.getDeletedAt()).isNotNull();
+        // Optional.empty()이므로 delete()는 호출되지 않아야 함
+        then(refreshTokenRepository).should(never()).delete(any());
     }
 }
