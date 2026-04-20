@@ -64,7 +64,9 @@ public enum ErrorCode {
     LOGIN_BLOCKED(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도해주세요."),
 
     // 이메일 인증
-    INVALID_VERIFICATION_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 인증 링크입니다.");
+    INVALID_VERIFICATION_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 인증 링크입니다."),
+    // 이메일 인증을 완료하지 않으면 로그인 자체를 막아 "인증 = 가입 완료" 흐름을 강제
+    EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요.");
 
     private final HttpStatus status;
     private final String message;
