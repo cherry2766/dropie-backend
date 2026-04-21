@@ -61,7 +61,7 @@ class S3ServiceTest {
         // then
         assertThat(response.getPresignedUrl()).isNotNull(); // presignedUrl이 정상적으로 반환됨
         assertThat(response.getImageUrl()).startsWith("https://test-bucket.s3.ap-northeast-2.amazonaws.com/images/");
-        assertThat(response.getImageUrl()).endsWith("-test.jpg"); // UUID-파일명 형식
+        assertThat(response.getImageUrl()).endsWith(".jpg"); // UUID.확장자 형식
     }
 
     @Test

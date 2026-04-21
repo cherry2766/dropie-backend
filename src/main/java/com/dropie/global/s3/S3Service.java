@@ -36,8 +36,12 @@ public class S3Service {
      * 예: images/a1b2c3d4-product.jpg
      */
     public PresignedUrlResponse generatePresignedUrl(String fileName, String contentType) {
-        // S3에 저장될 경로 = images/{UUID}-{파일명}
-        String key = "images/" + UUID.randomUUID() + "-" + fileName;
+        // 원본 파일명에 한글/공백/특수문자가 포함될 수 있어 확장자만 추출
+        // 예: "상품 사진 (1).jpg" → ".jpg" → "images/{UUID}.jpg"
+        String extension = fileName.contains(".")
+                ? fileName.substring(fileName.lastIndexOf("."))
+                : "";
+        String key = "images/" + UUID.randomUUID() + extension;
 
         try {
             // S3에 PUT 요청을 허용하는 Presigned URL 생성
