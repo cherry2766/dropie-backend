@@ -4,6 +4,7 @@ import com.dropie.domain.tag.dto.response.TagResponse;
 import com.dropie.domain.tag.entity.Tag;
 import com.dropie.domain.tag.service.TagService;
 import com.dropie.global.config.SecurityConfig;
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,9 @@ class TagControllerTest {
     // 실제 JWT 동작은 필요 없고 빈 등록만 되면 되므로 Mock으로 대체
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
 
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     @MockitoBean

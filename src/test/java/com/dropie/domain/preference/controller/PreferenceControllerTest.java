@@ -1,9 +1,13 @@
 package com.dropie.domain.preference.controller;
 
 import com.dropie.domain.preference.service.PreferenceService;
+import com.dropie.domain.user.entity.Role;
+import com.dropie.domain.user.entity.User;
 import com.dropie.global.config.SecurityConfig;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.security.CustomUserDetails;
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,9 +15,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -48,9 +53,22 @@ class PreferenceControllerTest {
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
+
+    private CustomUserDetails mockUserDetails() {
+        User user = User.builder()
+                .id(1L)
+                .email("test@email.com")
+                .nickname("테스터")
+                .role(Role.USER)
+                .build();
+        return new CustomUserDetails(user);
+    }
 
     @BeforeEach
     void setUp() {
@@ -61,7 +79,6 @@ class PreferenceControllerTest {
 
     @Test
     @DisplayName("POST /users/me/preferences - 성공 시 204 반환")
-    @WithMockUser   // 인증된 유저 세팅
     void 취향_태그_등록_성공() throws Exception {
         // given
         // savePreferences()는 void 메서드 → willReturn() 대신 willDoNothing() 사용
@@ -69,6 +86,7 @@ class PreferenceControllerTest {
 
         // when & then
         mockMvc.perform(post("/users/me/preferences")
+                        .with(user(mockUserDetails()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -80,7 +98,6 @@ class PreferenceControllerTest {
 
     @Test
     @DisplayName("POST /users/me/preferences - 존재하지 않는 tagId 시 404 반환")
-    @WithMockUser
     void 잘못된_태그_아이디_실패() throws Exception {
         // given
         // void 메서드에서 예외를 던지는 경우 willThrow() 사용
@@ -89,6 +106,7 @@ class PreferenceControllerTest {
 
         // when & then
         mockMvc.perform(post("/users/me/preferences")
+                        .with(user(mockUserDetails()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

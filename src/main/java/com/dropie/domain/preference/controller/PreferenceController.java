@@ -2,6 +2,7 @@ package com.dropie.domain.preference.controller;
 
 import com.dropie.domain.preference.dto.request.PreferenceRequest;
 import com.dropie.domain.preference.service.PreferenceService;
+import com.dropie.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,12 +28,12 @@ public class PreferenceController {
     // Response: 204 No Content (body 없음)
     @PostMapping
     public ResponseEntity<Void> savePreferences(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody PreferenceRequest request) {
 
-        log.debug("[POST /users/me/preferences] email: {}", email);
+        log.debug("[POST /users/me/preferences] email: {}", userDetails.getUsername());
 
-        preferenceService.savePreferences(email, request);
+        preferenceService.savePreferences(userDetails.getUsername(), request);
 
         return ResponseEntity.noContent().build();
 

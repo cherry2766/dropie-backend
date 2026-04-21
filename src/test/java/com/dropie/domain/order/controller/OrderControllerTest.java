@@ -15,6 +15,7 @@ import com.dropie.global.config.SecurityConfig;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.security.CustomUserDetails;
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtTokenProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -66,6 +67,9 @@ class OrderControllerTest {
     // 없으면 SecurityConfig 로드 시 UnsatisfiedDependencyException 발생
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
 
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     @MockitoBean

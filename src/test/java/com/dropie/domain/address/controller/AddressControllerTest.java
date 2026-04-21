@@ -4,9 +4,13 @@ import com.dropie.domain.address.dto.response.AddressCreateResponse;
 import com.dropie.domain.address.dto.response.AddressResponse;
 import com.dropie.domain.address.dto.response.AddressUpdateResponse;
 import com.dropie.domain.address.service.AddressService;
+import com.dropie.domain.user.entity.Role;
+import com.dropie.domain.user.entity.User;
 import com.dropie.global.config.SecurityConfig;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.security.CustomUserDetails;
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +18,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 import java.util.List;
 
@@ -53,9 +58,22 @@ class AddressControllerTest {
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
+
+    private CustomUserDetails mockUserDetails() {
+        User user = User.builder()
+                .id(1L)
+                .email("test@email.com")
+                .nickname("테스터")
+                .role(Role.USER)
+                .build();
+        return new CustomUserDetails(user);
+    }
 
     @BeforeEach
     void setUp() {
@@ -66,7 +84,6 @@ class AddressControllerTest {
 
     @Test
     @DisplayName("GET /users/me/addresses - 성공 시 200과 배송지 목록 반환")
-    @WithMockUser // @WithMockUser → 가짜 인증 사용자로 요청 처리 (email은 "user"로 주입됨)
     void 배송지_목록조회_API_성공() throws Exception {
         // given
         AddressResponse response = AddressResponse.builder()
@@ -81,7 +98,7 @@ class AddressControllerTest {
         given(addressService.getAddresses(any())).willReturn(List.of(response));
 
         // when & then
-        mockMvc.perform(get("/users/me/addresses"))
+        mockMvc.perform(get("/users/me/addresses").with(user(mockUserDetails())))
                 .andExpect(status().isOk()) // 200
                 .andExpect(jsonPath("$[0].receiverName").value("체리"))   // 첫 번째 항목 이름
                 .andExpect(jsonPath("$[0].isDefault").value(true));      // 기본 배송지 여부
@@ -97,7 +114,6 @@ class AddressControllerTest {
 
     @Test
     @DisplayName("POST /users/me/addresses - 성공 시 201과 생성된 배송지 반환")
-    @WithMockUser
     void 배송지_추가_API_성공() throws Exception {
         // given
         AddressCreateResponse response = AddressCreateResponse.builder()
@@ -110,6 +126,7 @@ class AddressControllerTest {
 
         // when & then
         mockMvc.perform(post("/users/me/addresses")
+                        .with(user(mockUserDetails()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -130,7 +147,6 @@ class AddressControllerTest {
 
     @Test
     @DisplayName("POST /users/me/addresses - 필수 필드 누락 시 400")
-    @WithMockUser
     void 배송지_추가_API_유효성검사_실패() throws Exception {
         // given
         // @NotBlank 필드(receiverName, phone, zipcode, address1)나 @NotNull(isDefault) 누락 시
@@ -138,6 +154,7 @@ class AddressControllerTest {
 
         // when & then
         mockMvc.perform(post("/users/me/addresses")
+                        .with(user(mockUserDetails()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -149,7 +166,6 @@ class AddressControllerTest {
 
     @Test
     @DisplayName("PATCH /users/me/addresses/{id} - 성공 시 200과 수정된 배송지 반환")
-    @WithMockUser
     void 배송지_수정_API_성공() throws Exception {
         // given
         AddressUpdateResponse response = AddressUpdateResponse.builder()
@@ -164,6 +180,7 @@ class AddressControllerTest {
         // when & then
         // PATCH는 변경할 필드만 포함 — label만 수정
         mockMvc.perform(patch("/users/me/addresses/1")
+                        .with(user(mockUserDetails()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -177,7 +194,6 @@ class AddressControllerTest {
 
     @Test
     @DisplayName("PATCH /users/me/addresses/{id} - 본인 배송지 아님 404")
-    @WithMockUser
     void 배송지_수정_API_배송지없음_404() throws Exception {
         // given
         given(addressService.updateAddress(any(), eq(999L), any()))
@@ -185,6 +201,7 @@ class AddressControllerTest {
 
         // when & then
         mockMvc.perform(patch("/users/me/addresses/999")
+                        .with(user(mockUserDetails()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -197,20 +214,18 @@ class AddressControllerTest {
 
     @Test
     @DisplayName("DELETE /users/me/addresses/{id} - 성공 시 204 반환")
-    @WithMockUser
     void 배송지_삭제_API_성공() throws Exception {
         // given
         // deleteAddress는 void 반환이므로 willDoNothing() 사용
         willDoNothing().given(addressService).deleteAddress(any(), eq(1L));
 
         // when & then
-        mockMvc.perform(delete("/users/me/addresses/1"))
+        mockMvc.perform(delete("/users/me/addresses/1").with(user(mockUserDetails())))
                 .andExpect(status().isNoContent());  // 204 (응답 바디 없음)
     }
 
     @Test
     @DisplayName("DELETE /users/me/addresses/{id} - 본인 배송지 아님 404")
-    @WithMockUser
     void 배송지_삭제_API_배송지없음_404() throws Exception {
         // given
         // void 메서드 예외 설정은 willThrow(...).given(mock).method(...) 순서로 작성
@@ -218,7 +233,7 @@ class AddressControllerTest {
                 .given(addressService).deleteAddress(any(), eq(999L));
 
         // when & then
-        mockMvc.perform(delete("/users/me/addresses/999"))
+        mockMvc.perform(delete("/users/me/addresses/999").with(user(mockUserDetails())))
                 .andExpect(status().isNotFound())                         // 404
                 .andExpect(jsonPath("$.code").value("ADDRESS_NOT_FOUND"));
     }

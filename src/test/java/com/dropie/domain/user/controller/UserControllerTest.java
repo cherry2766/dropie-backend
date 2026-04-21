@@ -1,17 +1,22 @@
 package com.dropie.domain.user.controller;
 
 import com.dropie.domain.user.dto.response.UserResponse;
+import com.dropie.domain.user.entity.Role;
+import com.dropie.domain.user.entity.User;
 import com.dropie.domain.user.service.UserService;
 import com.dropie.global.config.SecurityConfig;
+import com.dropie.global.security.CustomUserDetails;
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -43,10 +48,23 @@ class UserControllerTest {
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     // @WebMvcTest는 Redis를 띄우지 않으므로 Mock으로 등록해야 컨텍스트 로드가 됨
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
+
+    private CustomUserDetails mockUserDetails() {
+        User user = User.builder()
+                .id(1L)
+                .email("test@email.com")
+                .nickname("테스터")
+                .role(Role.USER)
+                .build();
+        return new CustomUserDetails(user);
+    }
 
     @BeforeEach
     void setUp() {
@@ -57,7 +75,6 @@ class UserControllerTest {
 
     @Test
     @DisplayName("GET /users/me - 성공 시 200과 내 정보 반환")
-    @WithMockUser // @WithMockUser → 가짜 인증 사용자로 요청 처리 (email은 "user"로 주입됨)
     void 내정보_조회_API_성공() throws Exception {
         // given
         UserResponse response = UserResponse.builder()
@@ -70,7 +87,9 @@ class UserControllerTest {
         given(userService.getMe(any())).willReturn(response);
 
         // when & then
-        mockMvc.perform(get("/users/me"))
+        // .with(user(...)): CustomUserDetails를 principal로 직접 주입
+        // @WithMockUser는 Spring Security 기본 User를 넣어 CustomUserDetails로 못 받음
+        mockMvc.perform(get("/users/me").with(user(mockUserDetails())))
                 .andExpect(status().isOk()) // 200
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.email").value("test@email.com"))
