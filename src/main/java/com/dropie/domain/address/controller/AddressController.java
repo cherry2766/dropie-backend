@@ -6,6 +6,7 @@ import com.dropie.domain.address.dto.response.AddressCreateResponse;
 import com.dropie.domain.address.dto.response.AddressResponse;
 import com.dropie.domain.address.dto.response.AddressUpdateResponse;
 import com.dropie.domain.address.service.AddressService;
+import com.dropie.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,41 +28,41 @@ public class AddressController {
     // 배송지 목록 조회
     // GET /users/me/addresses
     @GetMapping
-    public ResponseEntity<List<AddressResponse>> getAddresses(@AuthenticationPrincipal String email) {
-        log.debug("[GET /users/me/addresses] email : {}", email);
-        return ResponseEntity.ok(addressService.getAddresses(email)); //200
+    public ResponseEntity<List<AddressResponse>> getAddresses(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.debug("[GET /users/me/addresses] email : {}", userDetails.getUsername());
+        return ResponseEntity.ok(addressService.getAddresses(userDetails.getUsername())); //200
     }
 
     // 배송지 추가
     // POST /users/me/addresses
     @PostMapping
     public ResponseEntity<AddressCreateResponse> addAddress(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestBody @Valid AddressRequest request) {
-        log.debug("[POST /users/me/addresses] email : {}", email);
+        log.debug("[POST /users/me/addresses] email : {}", userDetails.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED) //201
-                .body(addressService.addAddress(email, request));
+                .body(addressService.addAddress(userDetails.getUsername(), request));
     }
 
     // 배송지 수정
     // PATCH /users/me/addresses/{addressId}
     @PatchMapping("/{addressId}")
     public ResponseEntity<AddressUpdateResponse> updateAddress(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long addressId,
             @RequestBody AddressUpdateRequest request) {    // PATCH는 모든 필드 optional이라 @Valid 없음
-        log.debug("[PATCH /users/me/addresses/{}] email : {}", addressId, email);
-        return ResponseEntity.ok(addressService.updateAddress(email, addressId, request));
+        log.debug("[PATCH /users/me/addresses/{}] email : {}", addressId, userDetails.getUsername());
+        return ResponseEntity.ok(addressService.updateAddress(userDetails.getUsername(), addressId, request));
     }
 
     // 배송지 삭제
     // DELETE /users/me/addresses/{addressId}
     @DeleteMapping("/{addressId}")
     public ResponseEntity<Void> deleteAddress(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long addressId) {
-        log.debug("[DELETE /users/me/addresses/{}] email: {}", addressId, email);
-        addressService.deleteAddress(email, addressId);
+        log.debug("[DELETE /users/me/addresses/{}] email: {}", addressId, userDetails.getUsername());
+        addressService.deleteAddress(userDetails.getUsername(), addressId);
         return ResponseEntity.noContent().build(); // 204
     }
 

@@ -1,5 +1,6 @@
 package com.dropie.global.config;
 
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtAuthenticationFilter;
 import com.dropie.global.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,6 +30,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final CustomUserDetailsService customUserDetailsService;
 
     // AuthenticationManager : 실제 인증(아이디/비밀번호 검증)을 수행하는 객체
     // AuthService에서 로그인 처리할 때 사용
@@ -62,7 +64,7 @@ public class SecurityConfig {
                 // 6. JWT 필터를 UsernamePasswordAuthenticationFilter 앞에 등록
                 // → 모든 요청에서 JWT 검증이 먼저 실행됨
                 .addFilterBefore(
-                        new JwtAuthenticationFilter(jwtTokenProvider),
+                        new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailsService),
                         UsernamePasswordAuthenticationFilter.class
                 );
 

@@ -59,6 +59,8 @@ public class S3Service {
             // 형식: https://{버킷명}.s3.{리전}.amazonaws.com/{key}
             String imageUrl = "https://" + bucket + ".s3." + region + ".amazonaws.com/" + key;
 
+            log.info("Presigned URL 생성 완료: key={}, imageUrl={}", key, imageUrl);
+
             return new PresignedUrlResponse(presignedUrl, imageUrl);
         } catch (Exception e) {
             log.error("Presigned URL 생성 실패: fileName={}, error={}", fileName, e.getMessage());

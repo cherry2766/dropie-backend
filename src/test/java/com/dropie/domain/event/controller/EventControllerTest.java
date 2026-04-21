@@ -9,6 +9,7 @@ import com.dropie.global.common.PageResponse;
 import com.dropie.global.config.SecurityConfig;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,9 @@ class EventControllerTest {
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
 
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     @MockitoBean

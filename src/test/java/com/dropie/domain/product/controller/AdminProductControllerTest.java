@@ -7,6 +7,7 @@ import com.dropie.domain.product.service.AdminProductService;
 import com.dropie.global.config.SecurityConfig;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.security.CustomUserDetailsService;
 import com.dropie.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,9 @@ class AdminProductControllerTest {
     // SecurityConfig 로드 시 JwtTokenProvider 빈이 필요 — 실제 JWT 동작 불필요, Mock으로 대체
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
 
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     @MockitoBean

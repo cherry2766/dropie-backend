@@ -32,6 +32,9 @@ public class S3Controller {
             @RequestBody @Valid PresignedUrlRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
 
+        log.info("Presigned URL 요청: userId={}, fileName={}, contentType={}",
+                userDetails.getUser().getId(), request.getFileName(), request.getContentType());
+
         PresignedUrlResponse response = s3Service.generatePresignedUrl(
                 request.getFileName(),
                 request.getContentType()

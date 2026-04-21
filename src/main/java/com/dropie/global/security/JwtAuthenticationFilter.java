@@ -9,18 +9,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 
 // OncePerRequestFilter : 하나의 요청에 대해 딱 한 번만 실행되는 필터
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final CustomUserDetailsService customUserDetailsService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
@@ -44,11 +43,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // 5. 토큰에서 email 꺼내기
             String email = jwtTokenProvider.getEmail(token);
 
-            // 6. 토큰에서 role 꺼내서 SecurityContext에 인증 정보 저장
-            String role = jwtTokenProvider.getRole(token);
+            // 6. email로 DB에서 유저를 조회해 CustomUserDetails 생성
+            // → @AuthenticationPrincipal로 컨트롤러에서 바로 꺼낼 수 있게 됨
+            CustomUserDetails userDetails = (CustomUserDetails) customUserDetailsService.loadUserByUsername(email);
+
+            // 7. CustomUserDetails를 principal로 담아 SecurityContext에 인증 정보 저장
             UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(email, null,
-                            List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(authToken);
 
             // 7. 다음 필터로 넘기기

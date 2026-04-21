@@ -3,6 +3,7 @@ package com.dropie.domain.user.controller;
 import com.dropie.domain.user.dto.response.UserResponse;
 import com.dropie.domain.user.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
+import com.dropie.global.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -26,13 +27,10 @@ public class UserController {
     // Header: Authorization: Bearer {토큰}
     // Response: { "id": 1, "email": "...", "nickname": "...", "role": "USER" }
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getMe(@AuthenticationPrincipal String email) {
-        // @AuthenticationPrincipal : SecurityContext에 저장된 principal을 꺼내줌
-        // JwtAuthenticationFilter에서 new UsernamePasswordAuthenticationToken(email, ...)
-        // 으로 email을 principal에 넣었기 때문에 String으로 바로 받을 수 있음
-        log.debug("[GET/users/me] email: {}", email);
+    public ResponseEntity<UserResponse> getMe(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.debug("[GET/users/me] email: {}", userDetails.getUsername());
 
-        return ResponseEntity.ok(userService.getMe(email));
+        return ResponseEntity.ok(userService.getMe(userDetails.getUsername()));
     }
 
     // 온보딩 스킵 API
@@ -40,8 +38,8 @@ public class UserController {
     // → 인증된 유저만 호출 가능 (@AuthenticationPrincipal로 유저 식별)
     @PostMapping("/onboarding/skip")
     public ResponseEntity<Void> skipOnboarding(
-            @AuthenticationPrincipal String email) {
-        userService.skipOnboarding(email);
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        userService.skipOnboarding(userDetails.getUsername());
         return ResponseEntity.ok().build();
     }
 
@@ -52,13 +50,13 @@ public class UserController {
     // Response: 204 No Content
     @DeleteMapping("/me")
     public ResponseEntity<Void> withdraw(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             HttpServletResponse response) {
 
-        log.debug("[DELETE /users/me] 탈퇴 요청 - email: {}", email);
+        log.debug("[DELETE /users/me] 탈퇴 요청 - email: {}", userDetails.getUsername());
 
         // 유저 소프트 딜리트 + DB에서 Refresh Token 삭제
-        userService.withdraw(email);
+        userService.withdraw(userDetails.getUsername());
 
         // 쿠키 즉시 만료 처리
         // → maxAge(0) : 브라우저가 응답 받는 즉시 쿠키를 삭제함
