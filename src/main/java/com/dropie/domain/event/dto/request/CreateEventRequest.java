@@ -20,10 +20,8 @@ public class CreateEventRequest {
     @NotBlank
     private String description;
 
-    @NotBlank
     private String thumbnailImageUrl;
 
-    @NotBlank
     private String imageUrl;
 
     @NotNull
