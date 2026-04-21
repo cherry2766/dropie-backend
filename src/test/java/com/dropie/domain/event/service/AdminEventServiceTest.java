@@ -6,6 +6,7 @@ import com.dropie.domain.event.dto.request.CreateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
+import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.entity.Product;
@@ -24,8 +25,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -197,6 +198,36 @@ class AdminEventServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_STATUS_TRANSITION);
+    }
+
+    @Test
+    @DisplayName("이벤트 전체 목록 조회 성공 — 이벤트 수만큼 EventListResponse 반환")
+    void 이벤트_전체목록_조회_성공() {
+        // given
+        given(eventRepository.findAll()).willReturn(List.of(upcomingEvent, openEvent));
+
+        // when
+        List<EventListResponse> result = adminEventService.getEvents();
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getBrandName()).isEqualTo("노티드");
+        assertThat(result.get(0).getStatus()).isEqualTo(EventStatus.UPCOMING);
+        assertThat(result.get(1).getStatus()).isEqualTo(EventStatus.OPEN);
+        then(eventRepository).should().findAll();
+    }
+
+    @Test
+    @DisplayName("이벤트 전체 목록 조회 성공 — 이벤트가 없으면 빈 리스트 반환")
+    void 이벤트_전체목록_조회_빈목록() {
+        // given
+        given(eventRepository.findAll()).willReturn(List.of());
+
+        // when
+        List<EventListResponse> result = adminEventService.getEvents();
+
+        // then
+        assertThat(result).isEmpty();
     }
 
     @Test

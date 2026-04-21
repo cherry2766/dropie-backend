@@ -6,6 +6,7 @@ import com.dropie.domain.event.dto.request.CreateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
+import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
 import com.dropie.global.exception.custom.EventNotFoundException;
@@ -16,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -23,6 +26,16 @@ public class AdminEventService {
 
     private final EventRepository eventRepository;
     private final S3Service s3Service;
+
+    // 이벤트 전체 목록 조회 — 관리자 페이지에서 등록한 이벤트 목록을 보여줄 때 사용
+    // readOnly = true: 데이터 변경 없으므로 조회 전용 트랜잭션으로 성능 최적화
+    @Transactional(readOnly = true)
+    public List<EventListResponse> getEvents() {
+        log.debug("[getEvents] 이벤트 전체 목록 조회");
+        return eventRepository.findAll().stream()
+                .map(EventListResponse::from)
+                .toList();
+    }
 
     // 이벤트 등록
     // status는 항상 UPCOMING으로 고정 — 등록 직후 OPEN이 되면 안 되므로 요청값 무시
