@@ -70,10 +70,10 @@ class AuthServiceTest {
         SignUpRequest request = new SignUpRequest("test@email.com", "pwd1234", "강체리");
 
         given(userRepository.existsByEmail("test@email.com")).willReturn(false);
+        given(userRepository.existsByNickname("강체리")).willReturn(false);
         given(passwordEncoder.encode("pwd1234")).willReturn("encoded_pwd");
 
         // when
-        // signUp은 이제 HttpServletResponse 파라미터 없음 (토큰 발급 안 하므로)
         SignUpResponse response = authService.signUp(request);
 
         // then
@@ -95,6 +95,21 @@ class AuthServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.DUPLICATE_EMAIL);
+    }
+
+    @Test
+    @DisplayName("회원가입 실패 - 닉네임 중복")
+    void 회원가입_중복닉네임_예외() {
+        // given
+        SignUpRequest request = new SignUpRequest("new@email.com", "pwd789", "강딸기");
+        given(userRepository.existsByEmail("new@email.com")).willReturn(false);
+        given(userRepository.existsByNickname("강딸기")).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> authService.signUp(request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.DUPLICATE_NICKNAME);
     }
 
     // ===================== login =====================

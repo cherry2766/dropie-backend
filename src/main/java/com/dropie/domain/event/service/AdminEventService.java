@@ -6,6 +6,7 @@ import com.dropie.domain.event.dto.request.CreateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
+import com.dropie.domain.event.dto.response.AdminEventResponse;
 import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
@@ -30,10 +31,10 @@ public class AdminEventService {
     // 이벤트 전체 목록 조회 — 관리자 페이지에서 등록한 이벤트 목록을 보여줄 때 사용
     // readOnly = true: 데이터 변경 없으므로 조회 전용 트랜잭션으로 성능 최적화
     @Transactional(readOnly = true)
-    public List<EventListResponse> getEvents() {
+    public List<AdminEventResponse> getEvents() {
         log.debug("[getEvents] 이벤트 전체 목록 조회");
         return eventRepository.findAll().stream()
-                .map(EventListResponse::from)
+                .map(AdminEventResponse::from)
                 .toList();
     }
 

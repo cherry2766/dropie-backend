@@ -89,7 +89,8 @@ class AdminProductServiceTest {
         // then
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("초코두바이도넛");
-        assertThat(result.get(0).getBrandName()).isEqualTo("노티드"); // event.getBrandName()
+        assertThat(result.get(0).getDescription()).isEqualTo("상품 설명");
+        assertThat(result.get(0).getBrandName()).isEqualTo("노티드");
         assertThat(result.get(0).getPrice()).isEqualTo(5500);
         assertThat(result.get(0).getStock()).isEqualTo(100);
         // findAllWithEvent() 가 호출됐는지 확인 — findAll()이 아닌 JOIN FETCH 전용 쿼리를 써야 함

@@ -5,8 +5,8 @@ import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.dto.request.CreateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
+import com.dropie.domain.event.dto.response.AdminEventResponse;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
-import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.entity.Product;
@@ -201,17 +201,20 @@ class AdminEventServiceTest {
     }
 
     @Test
-    @DisplayName("이벤트 전체 목록 조회 성공 — 이벤트 수만큼 EventListResponse 반환")
+    @DisplayName("이벤트 전체 목록 조회 성공 — 이벤트 수만큼 AdminEventResponse 반환")
     void 이벤트_전체목록_조회_성공() {
         // given
         given(eventRepository.findAll()).willReturn(List.of(upcomingEvent, openEvent));
 
         // when
-        List<EventListResponse> result = adminEventService.getEvents();
+        List<AdminEventResponse> result = adminEventService.getEvents();
 
         // then
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getBrandName()).isEqualTo("노티드");
+        assertThat(result.get(0).getDescription()).isEqualTo("설명");
+        assertThat(result.get(0).getThumbnailImageUrl()).isEqualTo("https://thumb.jpg");
+        assertThat(result.get(0).getImageUrl()).isEqualTo("https://image.jpg");
         assertThat(result.get(0).getStatus()).isEqualTo(EventStatus.UPCOMING);
         assertThat(result.get(1).getStatus()).isEqualTo(EventStatus.OPEN);
         then(eventRepository).should().findAll();
@@ -224,7 +227,7 @@ class AdminEventServiceTest {
         given(eventRepository.findAll()).willReturn(List.of());
 
         // when
-        List<EventListResponse> result = adminEventService.getEvents();
+        List<AdminEventResponse> result = adminEventService.getEvents();
 
         // then
         assertThat(result).isEmpty();
