@@ -1,9 +1,15 @@
 package com.dropie.domain.user.controller;
 
+import com.dropie.domain.user.dto.request.UpdateNicknameRequest;
+import com.dropie.domain.user.dto.request.UpdateProfileImageRequest;
 import com.dropie.domain.user.dto.response.UserResponse;
 import com.dropie.domain.user.service.UserService;
+import com.dropie.global.s3.PresignedUrlRequest;
+import com.dropie.global.s3.PresignedUrlResponse;
+import com.dropie.global.s3.S3Service;
 import jakarta.servlet.http.HttpServletResponse;
 import com.dropie.global.security.CustomUserDetails;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final S3Service s3Service;
 
     // 내 정보 조회 API
     // GET /users/me
@@ -71,5 +78,41 @@ public class UserController {
         response.addHeader(HttpHeaders.SET_COOKIE, expired.toString());
 
         return ResponseEntity.noContent().build();
+    }
+
+    // 프로필 이미지 업로드용 Presigned URL 발급
+    // POST /users/me/profile-image/presigned-url → 200
+    // /users/** 는 SecurityConfig에서 로그인 유저면 접근 가능 — 별도 권한 설정 불필요
+    @PostMapping("/me/profile-image/presigned-url")
+    public ResponseEntity<PresignedUrlResponse> getProfileImagePresignedUrl(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody @Valid PresignedUrlRequest request) {
+        log.info("[POST /users/me/profile-image/presigned-url] userId: {}",
+                userDetails.getUser().getId());
+        return ResponseEntity.ok(
+                s3Service.generatePresignedUrl(request.getFileName(), request.getContentType()));
+    }
+
+    // 닉네임 수정
+    // PATCH /users/me → 200
+    @PatchMapping("/me")
+    public ResponseEntity<UserResponse> updateNickname(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody @Valid UpdateNicknameRequest request) {
+        log.debug("[PATCH /users/me] 닉네임 수정 요청 - email: {}", userDetails.getUsername());
+        return ResponseEntity.ok(
+                userService.updateNickname(userDetails.getUsername(), request));
+    }
+
+    // 프로필 이미지 URL 저장
+    // PATCH /users/me/profile-image → 200
+    // S3 업로드 완료 후 imageUrl을 받아서 DB에 저장하는 단계
+    @PatchMapping("/me/profile-image")
+    public ResponseEntity<UserResponse> updateProfileImage(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody @Valid UpdateProfileImageRequest request) {
+        log.debug("[PATCH /users/me/profile-image] 이미지 수정 요청 - email: {}", userDetails.getUsername());
+        return ResponseEntity.ok(
+                userService.updateProfileImage(userDetails.getUsername(), request));
     }
 }

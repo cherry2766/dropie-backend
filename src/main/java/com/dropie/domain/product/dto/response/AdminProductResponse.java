@@ -12,16 +12,18 @@ public class AdminProductResponse {
 
     private Long id;
     private String name;
+    private String description;
     private String imageUrl;
     private int price;
     private int stock;
     private Long eventId;
-    private String brandName; // 이벤트 브랜드명 — 관리자 목록에서 어느 이벤트 소속인지 식별
+    private String brandName;
 
     public static AdminProductResponse from(Product product) {
         return AdminProductResponse.builder()
                 .id(product.getId())
                 .name(product.getName())
+                .description(product.getDescription())
                 .imageUrl(product.getImageUrl())
                 .price(product.getPrice())
                 .stock(product.getStock())

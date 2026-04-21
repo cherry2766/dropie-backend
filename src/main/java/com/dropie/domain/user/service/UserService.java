@@ -2,8 +2,12 @@ package com.dropie.domain.user.service;
 
 import com.dropie.domain.auth.repository.RefreshTokenRepository;
 import com.dropie.domain.preference.repository.UserPreferenceRepository;
+import com.dropie.domain.user.dto.request.UpdateNicknameRequest;
+import com.dropie.domain.user.dto.request.UpdateProfileImageRequest;
 import com.dropie.domain.user.entity.User;
 import com.dropie.domain.user.dto.response.UserResponse;
+import com.dropie.global.exception.BusinessException;
+import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.exception.custom.UserNotFoundException;
 import com.dropie.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,14 +35,7 @@ public class UserService {
 
         log.info("[getMe] 조회 완료 - userId: {}", user.getId());
 
-        // User 엔티티를 그대로 반환하지 않고 DTO로 변환해서 반환
-        // → 필요한 필드만 노출, password 같은 민감한 정보 차단
-        return UserResponse.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .nickname(user.getNickname())
-                .role(user.getRole().name())  // enum → String 변환 (ex. "USER", "ADMIN")
-                .build();
+        return buildUserResponse(user);
     }
 
     @Transactional
@@ -84,5 +81,48 @@ public class UserService {
         log.info("[withdraw] 탈퇴 완료 - email: {}", email);
     }
 
+    // 닉네임 수정
+    @Transactional
+    public UserResponse updateNickname(String email, UpdateNicknameRequest request) {
+        log.debug("[updateNickname] 닉네임 수정 요청 - email: {}", email);
 
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(UserNotFoundException::new);
+
+        // 본인의 현재 닉네임과 동일하면 중복체크 건너뜀
+        if (!user.getNickname().equals(request.getNickname())
+                && userRepository.existsByNickname(request.getNickname())) {
+            throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
+        }
+
+        user.updateNickname(request.getNickname());
+        log.info("[updateNickname] 닉네임 수정 완료 - email: {}, nickname: {}", email, request.getNickname());
+
+        return buildUserResponse(user);
+    }
+
+    // 프로필 이미지 URL 저장
+    @Transactional
+    public UserResponse updateProfileImage(String email, UpdateProfileImageRequest request) {
+        log.debug("[updateProfileImage] 프로필 이미지 수정 요청 - email: {}", email);
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(UserNotFoundException::new);
+
+        user.updateProfileImage(request.getProfileImageUrl());
+        log.info("[updateProfileImage] 프로필 이미지 수정 완료 - email: {}", email);
+
+        return buildUserResponse(user);
+    }
+
+    // UserResponse 빌더를 여러 메서드에서 반복 작성하지 않도록 private 메서드로 분리
+    private UserResponse buildUserResponse(User user) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .role(user.getRole().name())
+                .profileImageUrl(user.getProfileImageUrl())
+                .build();
+    }
 }

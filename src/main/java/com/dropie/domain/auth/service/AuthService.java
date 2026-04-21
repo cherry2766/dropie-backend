@@ -65,6 +65,12 @@ public class AuthService {
             throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
         }
 
+        // 닉네임 중복 확인
+        if (userRepository.existsByNickname(request.getNickname())) {
+            log.warn("[signUp] 닉네임 중복 - nickname: {}", request.getNickname());
+            throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
+        }
+
         // 유저 생성
         // → emailVerified는 @Builder.Default로 기본값이 false
         // → 인증 완료 전까지 emailVerified = false 상태로 DB에 저장됨

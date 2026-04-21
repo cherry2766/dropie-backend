@@ -68,12 +68,12 @@ class AdminProductControllerTest {
         // given
         List<AdminProductResponse> responses = List.of(
                 AdminProductResponse.builder()
-                        .id(1L).name("초코두바이도넛").imageUrl("https://image1.jpg")
+                        .id(1L).name("초코두바이도넛").description("상품 설명1").imageUrl("https://image1.jpg")
                         .price(5500).stock(30).eventId(1L).brandName("노티드")
                         .build(),
                 AdminProductResponse.builder()
-                        .id(2L).name("말차두바이도넛").imageUrl("https://image2.jpg")
-                        .price(5500).stock(0).eventId(1L).brandName("노티드") // 품절 상품
+                        .id(2L).name("말차두바이도넛").description("상품 설명2").imageUrl("https://image2.jpg")
+                        .price(5500).stock(0).eventId(1L).brandName("노티드")
                         .build()
         );
 

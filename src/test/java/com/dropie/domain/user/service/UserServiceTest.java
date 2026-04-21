@@ -5,6 +5,8 @@ import com.dropie.domain.auth.repository.RefreshTokenRepository;
 import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
+import com.dropie.domain.user.dto.request.UpdateNicknameRequest;
+import com.dropie.domain.user.dto.request.UpdateProfileImageRequest;
 import com.dropie.domain.user.dto.response.UserResponse;
 import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.exception.BusinessException;
@@ -21,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
@@ -246,5 +249,118 @@ class UserServiceTest {
         assertThat(user.getDeletedAt()).isNotNull();
         // Optional.empty()이므로 delete()는 호출되지 않아야 함
         then(refreshTokenRepository).should(never()).delete(any());
+    }
+
+    // ===================== updateNickname =====================
+
+    @Test
+    @DisplayName("닉네임 수정 성공")
+    void 닉네임_수정_성공() {
+        // given
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(userRepository.existsByNickname("딸기")).willReturn(false);
+
+        // when
+        UserResponse response = userService.updateNickname("test@email.com", new UpdateNicknameRequest("딸기"));
+
+        // then
+        assertThat(response.getNickname()).isEqualTo("딸기");
+        assertThat(user.getNickname()).isEqualTo("딸기"); // 엔티티 상태도 변경됐는지 확인
+    }
+
+    @Test
+    @DisplayName("닉네임 수정 성공 - 현재 닉네임과 동일하면 중복체크 없이 통과")
+    void 닉네임_수정_동일닉네임_성공() {
+        // given
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+
+        // when
+        UserResponse response = userService.updateNickname("test@email.com", new UpdateNicknameRequest("체리"));
+
+        // then
+        assertThat(response.getNickname()).isEqualTo("체리");
+        // 본인 닉네임과 같으면 existsByNickname 호출하지 않아야 함
+        then(userRepository).should(never()).existsByNickname(anyString());
+    }
+
+    @Test
+    @DisplayName("닉네임 수정 실패 - 이미 사용 중인 닉네임이면 DUPLICATE_NICKNAME 예외")
+    void 닉네임_수정_중복_예외() {
+        // given
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+        given(userRepository.existsByNickname("딸기")).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> userService.updateNickname("test@email.com", new UpdateNicknameRequest("딸기")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.DUPLICATE_NICKNAME);
+    }
+
+    @Test
+    @DisplayName("닉네임 수정 실패 - 존재하지 않는 유저")
+    void 닉네임_수정_유저없음_예외() {
+        // given
+        given(userRepository.findByEmail("ghost@email.com")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> userService.updateNickname("ghost@email.com", new UpdateNicknameRequest("딸기")))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    // ===================== updateProfileImage =====================
+
+    @Test
+    @DisplayName("프로필 이미지 수정 성공")
+    void 프로필이미지_수정_성공() {
+        // given
+        User user = User.builder()
+                .email("test@email.com")
+                .password("encoded_pwd")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+
+        // when
+        UserResponse response = userService.updateProfileImage("test@email.com",
+                new UpdateProfileImageRequest("https://s3.amazonaws.com/profiles/new.jpg"));
+
+        // then
+        assertThat(response.getProfileImageUrl()).isEqualTo("https://s3.amazonaws.com/profiles/new.jpg");
+    }
+
+    @Test
+    @DisplayName("프로필 이미지 수정 실패 - 존재하지 않는 유저")
+    void 프로필이미지_수정_유저없음_예외() {
+        // given
+        given(userRepository.findByEmail("ghost@email.com")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> userService.updateProfileImage("ghost@email.com",
+                new UpdateProfileImageRequest("https://s3.amazonaws.com/profiles/new.jpg")))
+                .isInstanceOf(UserNotFoundException.class);
     }
 }

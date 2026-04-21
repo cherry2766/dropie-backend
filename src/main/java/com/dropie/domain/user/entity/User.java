@@ -51,6 +51,9 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private boolean onboardingSkipped = false;
 
+    // null 허용 - 가입 직후에는 이미지 없을 수 있음
+    private String profileImageUrl;
+
     @OneToMany(mappedBy = "user")
     private List<Order> orders = new ArrayList<>();
 
@@ -81,5 +84,15 @@ public class User extends BaseEntity {
     // → 탈퇴 후에도 주문/이력 데이터를 보존할 수 있고, 실수로 탈퇴한 경우 복구도 가능
     public void withdraw() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    // 닉네임 수정
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    // 프로필 이미지 url 저장/변경
+    public void updateProfileImage(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
     }
 }

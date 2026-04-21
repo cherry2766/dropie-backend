@@ -4,7 +4,7 @@ import com.dropie.domain.event.dto.request.CreateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
-import com.dropie.domain.event.dto.response.EventListResponse;
+import com.dropie.domain.event.dto.response.AdminEventResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
 import com.dropie.domain.event.service.AdminEventService;
@@ -28,7 +28,7 @@ public class AdminEventController {
     // 이벤트 전체 목록 조회
     // GET /admin/events → 200
     @GetMapping("/events")
-    public ResponseEntity<List<EventListResponse>> getEvents() {
+    public ResponseEntity<List<AdminEventResponse>> getEvents() {
         log.debug("[GET /admin/events]");
         return ResponseEntity.ok(adminEventService.getEvents());
     }

@@ -1,8 +1,8 @@
 package com.dropie.domain.event.controller;
 
 import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.dto.response.AdminEventResponse;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
-import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
 import com.dropie.domain.event.service.AdminEventService;
@@ -68,14 +68,18 @@ class AdminEventControllerTest {
     @WithMockUser(roles = "ADMIN")
     void 이벤트_전체목록_조회_성공() throws Exception {
         // given
-        List<EventListResponse> responses = List.of(
-                EventListResponse.builder()
-                        .id(1L).brandName("노티드").status(EventStatus.OPEN)
+        List<AdminEventResponse> responses = List.of(
+                AdminEventResponse.builder()
+                        .id(1L).brandName("노티드").description("브랜드 설명")
+                        .thumbnailImageUrl("https://thumb1.jpg").imageUrl("https://image1.jpg")
+                        .status(EventStatus.OPEN)
                         .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
                         .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
                         .build(),
-                EventListResponse.builder()
-                        .id(2L).brandName("크리스피크림").status(EventStatus.UPCOMING)
+                AdminEventResponse.builder()
+                        .id(2L).brandName("크리스피크림").description("설명2")
+                        .thumbnailImageUrl("https://thumb2.jpg").imageUrl("https://image2.jpg")
+                        .status(EventStatus.UPCOMING)
                         .startAt(LocalDateTime.of(2026, 5, 1, 20, 0))
                         .endAt(LocalDateTime.of(2026, 5, 1, 22, 0))
                         .build()
@@ -89,6 +93,9 @@ class AdminEventControllerTest {
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].brandName").value("노티드"))
+                .andExpect(jsonPath("$[0].description").value("브랜드 설명"))
+                .andExpect(jsonPath("$[0].thumbnailImageUrl").value("https://thumb1.jpg"))
+                .andExpect(jsonPath("$[0].imageUrl").value("https://image1.jpg"))
                 .andExpect(jsonPath("$[0].status").value("OPEN"))
                 .andExpect(jsonPath("$[1].id").value(2L))
                 .andExpect(jsonPath("$[1].brandName").value("크리스피크림"))
