@@ -5,6 +5,7 @@ import com.dropie.domain.product.entity.Product;
 import com.dropie.domain.product.dto.request.CreateProductRequest;
 import com.dropie.domain.product.dto.request.UpdateProductRequest;
 import com.dropie.domain.product.dto.request.UpdateProductStockRequest;
+import com.dropie.domain.product.dto.response.AdminProductResponse;
 import com.dropie.domain.product.dto.response.ProductCreateResponse;
 import com.dropie.domain.product.dto.response.ProductStockResponse;
 import com.dropie.domain.product.dto.response.ProductUpdateResponse;
@@ -18,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,6 +29,17 @@ public class AdminProductService {
     private final ProductRepository productRepository;
     private final EventRepository eventRepository; // 상품 등록 시 이벤트 존재 여부 확인 필요
     private final S3Service s3Service;
+
+    // 상품 전체 목록 조회 — 관리자 페이지에서 모든 이벤트의 상품을 한눈에 보여줄 때 사용
+    // findAllWithEvent(): JOIN FETCH로 이벤트 정보를 한 번에 가져옴
+    // → 이렇게 하지 않으면 product.getEvent().getBrandName() 호출 시 상품 수만큼 추가 쿼리 발생 (N+1)
+    @Transactional(readOnly = true)
+    public List<AdminProductResponse> getProducts() {
+        log.debug("[getProducts] 상품 전체 목록 조회");
+        return productRepository.findAllWithEvent().stream()
+                .map(AdminProductResponse::from)
+                .toList();
+    }
 
     // 상품 등록
     @Transactional

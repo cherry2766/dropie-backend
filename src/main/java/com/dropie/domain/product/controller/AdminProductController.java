@@ -3,6 +3,7 @@ package com.dropie.domain.product.controller;
 import com.dropie.domain.product.dto.request.CreateProductRequest;
 import com.dropie.domain.product.dto.request.UpdateProductRequest;
 import com.dropie.domain.product.dto.request.UpdateProductStockRequest;
+import com.dropie.domain.product.dto.response.AdminProductResponse;
 import com.dropie.domain.product.dto.response.ProductCreateResponse;
 import com.dropie.domain.product.dto.response.ProductStockResponse;
 import com.dropie.domain.product.dto.response.ProductUpdateResponse;
@@ -14,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @Slf4j
 @RestController
 @RequestMapping("/admin")
@@ -21,6 +24,14 @@ import org.springframework.web.bind.annotation.*;
 public class AdminProductController {
 
     private final AdminProductService adminProductService;
+
+    // 상품 전체 목록 조회
+    // GET /admin/products → 200
+    @GetMapping("/products")
+    public ResponseEntity<List<AdminProductResponse>> getProducts() {
+        log.debug("[GET /admin/products]");
+        return ResponseEntity.ok(adminProductService.getProducts());
+    }
 
     // 상품 등록
     // POST /admin/products → 201

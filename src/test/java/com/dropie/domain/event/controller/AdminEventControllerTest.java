@@ -2,6 +2,7 @@ package com.dropie.domain.event.controller;
 
 import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
+import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
 import com.dropie.domain.event.service.AdminEventService;
@@ -22,6 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.data.redis.core.ValueOperations;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -58,6 +61,59 @@ class AdminEventControllerTest {
         ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get(anyString())).willReturn(null);
+    }
+
+    @Test
+    @DisplayName("GET /admin/events - 성공 시 200과 이벤트 목록 반환")
+    @WithMockUser(roles = "ADMIN")
+    void 이벤트_전체목록_조회_성공() throws Exception {
+        // given
+        List<EventListResponse> responses = List.of(
+                EventListResponse.builder()
+                        .id(1L).brandName("노티드").status(EventStatus.OPEN)
+                        .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
+                        .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                        .build(),
+                EventListResponse.builder()
+                        .id(2L).brandName("크리스피크림").status(EventStatus.UPCOMING)
+                        .startAt(LocalDateTime.of(2026, 5, 1, 20, 0))
+                        .endAt(LocalDateTime.of(2026, 5, 1, 22, 0))
+                        .build()
+        );
+
+        given(adminEventService.getEvents()).willReturn(responses);
+
+        // when & then
+        mockMvc.perform(get("/admin/events"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].brandName").value("노티드"))
+                .andExpect(jsonPath("$[0].status").value("OPEN"))
+                .andExpect(jsonPath("$[1].id").value(2L))
+                .andExpect(jsonPath("$[1].brandName").value("크리스피크림"))
+                .andExpect(jsonPath("$[1].status").value("UPCOMING"));
+    }
+
+    @Test
+    @DisplayName("GET /admin/events - 미인증 시 401")
+    void 이벤트_전체목록_조회_미인증() throws Exception {
+        // @WithMockUser 없음 → 401
+        mockMvc.perform(get("/admin/events"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /admin/events - 이벤트 없을 때 빈 배열 반환")
+    @WithMockUser(roles = "ADMIN")
+    void 이벤트_전체목록_조회_빈목록() throws Exception {
+        // given
+        given(adminEventService.getEvents()).willReturn(List.of());
+
+        // when & then
+        mockMvc.perform(get("/admin/events"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

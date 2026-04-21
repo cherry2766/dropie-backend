@@ -4,6 +4,7 @@ import com.dropie.domain.event.dto.request.CreateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
+import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
 import com.dropie.domain.event.service.AdminEventService;
@@ -14,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @Slf4j
 @RestController
 @RequestMapping("/admin")
@@ -21,6 +24,14 @@ import org.springframework.web.bind.annotation.*;
 public class AdminEventController {
 
     private final AdminEventService adminEventService;
+
+    // 이벤트 전체 목록 조회
+    // GET /admin/events → 200
+    @GetMapping("/events")
+    public ResponseEntity<List<EventListResponse>> getEvents() {
+        log.debug("[GET /admin/events]");
+        return ResponseEntity.ok(adminEventService.getEvents());
+    }
 
     // 이벤트 등록
     // POST /admin/events → 201

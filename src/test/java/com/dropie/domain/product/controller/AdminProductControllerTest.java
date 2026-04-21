@@ -1,5 +1,6 @@
 package com.dropie.domain.product.controller;
 
+import com.dropie.domain.product.dto.response.AdminProductResponse;
 import com.dropie.domain.product.dto.response.ProductCreateResponse;
 import com.dropie.domain.product.dto.response.ProductStockResponse;
 import com.dropie.domain.product.dto.response.ProductUpdateResponse;
@@ -21,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import java.util.List;
 import org.springframework.data.redis.core.ValueOperations;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -57,6 +59,56 @@ class AdminProductControllerTest {
         ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get(anyString())).willReturn(null);
+    }
+
+    @Test
+    @DisplayName("GET /admin/products - 성공 시 200과 상품 목록 반환")
+    @WithMockUser(roles = "ADMIN")
+    void 상품_전체목록_조회_성공() throws Exception {
+        // given
+        List<AdminProductResponse> responses = List.of(
+                AdminProductResponse.builder()
+                        .id(1L).name("초코두바이도넛").imageUrl("https://image1.jpg")
+                        .price(5500).stock(30).eventId(1L).brandName("노티드")
+                        .build(),
+                AdminProductResponse.builder()
+                        .id(2L).name("말차두바이도넛").imageUrl("https://image2.jpg")
+                        .price(5500).stock(0).eventId(1L).brandName("노티드") // 품절 상품
+                        .build()
+        );
+
+        given(adminProductService.getProducts()).willReturn(responses);
+
+        // when & then
+        mockMvc.perform(get("/admin/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].name").value("초코두바이도넛"))
+                .andExpect(jsonPath("$[0].eventId").value(1L))
+                .andExpect(jsonPath("$[0].brandName").value("노티드"))
+                .andExpect(jsonPath("$[1].stock").value(0)); // 품절 상품도 목록에 포함됨
+    }
+
+    @Test
+    @DisplayName("GET /admin/products - 미인증 시 401")
+    void 상품_전체목록_조회_미인증() throws Exception {
+        // @WithMockUser 없음 → 401
+        mockMvc.perform(get("/admin/products"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /admin/products - 상품 없을 때 빈 배열 반환")
+    @WithMockUser(roles = "ADMIN")
+    void 상품_전체목록_조회_빈목록() throws Exception {
+        // given
+        given(adminProductService.getProducts()).willReturn(List.of());
+
+        // when & then
+        mockMvc.perform(get("/admin/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

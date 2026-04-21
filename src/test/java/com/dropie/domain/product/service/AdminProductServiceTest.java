@@ -7,6 +7,7 @@ import com.dropie.domain.product.entity.Product;
 import com.dropie.domain.product.dto.request.CreateProductRequest;
 import com.dropie.domain.product.dto.request.UpdateProductRequest;
 import com.dropie.domain.product.dto.request.UpdateProductStockRequest;
+import com.dropie.domain.product.dto.response.AdminProductResponse;
 import com.dropie.domain.product.dto.response.ProductCreateResponse;
 import com.dropie.domain.product.dto.response.ProductStockResponse;
 import com.dropie.domain.product.repository.ProductRepository;
@@ -23,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,6 +74,39 @@ class AdminProductServiceTest {
                 .price(5500)
                 .stock(100)
                 .build();
+    }
+
+    @Test
+    @DisplayName("상품 전체 목록 조회 성공 — JOIN FETCH로 조회하고 AdminProductResponse 리스트 반환")
+    void 상품_전체목록_조회_성공() {
+        // given
+        // product는 setUp()에서 event와 연결되어 있음 — brandName 조회 가능
+        given(productRepository.findAllWithEvent()).willReturn(List.of(product));
+
+        // when
+        List<AdminProductResponse> result = adminProductService.getProducts();
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("초코두바이도넛");
+        assertThat(result.get(0).getBrandName()).isEqualTo("노티드"); // event.getBrandName()
+        assertThat(result.get(0).getPrice()).isEqualTo(5500);
+        assertThat(result.get(0).getStock()).isEqualTo(100);
+        // findAllWithEvent() 가 호출됐는지 확인 — findAll()이 아닌 JOIN FETCH 전용 쿼리를 써야 함
+        then(productRepository).should().findAllWithEvent();
+    }
+
+    @Test
+    @DisplayName("상품 전체 목록 조회 성공 — 상품이 없으면 빈 리스트 반환")
+    void 상품_전체목록_조회_빈목록() {
+        // given
+        given(productRepository.findAllWithEvent()).willReturn(List.of());
+
+        // when
+        List<AdminProductResponse> result = adminProductService.getProducts();
+
+        // then
+        assertThat(result).isEmpty();
     }
 
     @Test
