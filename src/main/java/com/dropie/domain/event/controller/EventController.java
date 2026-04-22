@@ -2,6 +2,7 @@ package com.dropie.domain.event.controller;
 
 import com.dropie.domain.event.dto.response.EventDetailResponse;
 import com.dropie.domain.event.dto.response.EventListResponse;
+import com.dropie.domain.event.dto.response.LineupRoundResponse;
 import com.dropie.domain.event.service.EventService;
 import com.dropie.global.common.PageResponse;
 import jakarta.validation.constraints.Min;
@@ -10,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Slf4j
 @Validated
@@ -41,5 +44,11 @@ public class EventController {
     ) {
         log.debug("[GET /events/{}] page={}, size={}", eventId, page, size);
         return ResponseEntity.ok(eventService.getEventDetail(eventId, page, size));
+    }
+
+    // GET /events/lineup — 라인업 조회
+    @GetMapping("/lineup")
+    public ResponseEntity<List<LineupRoundResponse>> getLineup() {
+        return ResponseEntity.ok(eventService.getLineup());
     }
 }

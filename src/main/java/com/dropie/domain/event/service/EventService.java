@@ -2,6 +2,7 @@ package com.dropie.domain.event.service;
 
 import com.dropie.domain.event.dto.response.EventDetailResponse;
 import com.dropie.domain.event.dto.response.EventListResponse;
+import com.dropie.domain.event.dto.response.LineupRoundResponse;
 import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.dto.response.ProductResponse;
@@ -15,6 +16,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -59,5 +65,31 @@ public class EventService {
         PageResponse<ProductResponse> products = PageResponse.from(productPage);
 
         return EventDetailResponse.of(event, products);
+    }
+
+    // GET /events/lineup — 라인업 조회
+    // startAt + endAt이 같은 이벤트를 같은 차수로 묶어서 반환
+    @Transactional(readOnly = true)
+    public List<LineupRoundResponse> getLineup() {
+        List<Event> events = eventRepository.findAllByOrderByStartAtAsc();
+
+        // LinkedHashMap: 삽입 순서 유지 → startAt 정렬 순서가 그대로 차수 순서가 됨
+        Map<String, List<Event>> grouped = new LinkedHashMap<>();
+        for (Event event : events) {
+            String key = event.getStartAt() + "_" + event.getEndAt();
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(event);
+        }
+
+        // 1차부터 순서대로 차수 번호 부여
+        List<LineupRoundResponse> result = new ArrayList<>();
+        int round = 1;
+        for (List<Event> group : grouped.values()) {
+            result.add(LineupRoundResponse.builder()
+                    .round(round++)
+                    .status(group.get(0).getStatus().name())
+                    .brands(group.stream().map(Event::getBrandName).toList())
+                    .build());
+        }
+        return result;
     }
 }

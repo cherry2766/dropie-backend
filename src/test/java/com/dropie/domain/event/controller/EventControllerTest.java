@@ -2,6 +2,7 @@ package com.dropie.domain.event.controller;
 
 import com.dropie.domain.event.dto.response.EventDetailResponse;
 import com.dropie.domain.event.dto.response.EventListResponse;
+import com.dropie.domain.event.dto.response.LineupRoundResponse;
 import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.service.EventService;
 import com.dropie.domain.product.dto.response.ProductResponse;
@@ -149,5 +150,46 @@ class EventControllerTest {
         mockMvc.perform(get("/events/999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("EVENT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("GET /events/lineup - 성공 시 200과 차수별 브랜드 목록 반환")
+    void 라인업_조회_성공() throws Exception {
+        // given
+        List<LineupRoundResponse> responses = List.of(
+                LineupRoundResponse.builder().round(1).status("FINISHED")
+                        .brands(List.of("솔트버터", "노아케이크")).build(),
+                LineupRoundResponse.builder().round(2).status("OPEN")
+                        .brands(List.of("밀담제과", "도넛클럽")).build(),
+                LineupRoundResponse.builder().round(3).status("UPCOMING")
+                        .brands(List.of("마들렌홈", "흑임자당")).build()
+        );
+
+        given(eventService.getLineup()).willReturn(responses);
+
+        // when & then
+        // /events/** 는 SecurityConfig에서 permitAll → 인증 없이 접근 가능
+        mockMvc.perform(get("/events/lineup"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].round").value(1))
+                .andExpect(jsonPath("$[0].status").value("FINISHED"))
+                .andExpect(jsonPath("$[0].brands[0]").value("솔트버터"))
+                .andExpect(jsonPath("$[1].round").value(2))
+                .andExpect(jsonPath("$[1].status").value("OPEN"))
+                .andExpect(jsonPath("$[2].round").value(3))
+                .andExpect(jsonPath("$[2].status").value("UPCOMING"));
+    }
+
+    @Test
+    @DisplayName("GET /events/lineup - 이벤트 없으면 빈 배열 반환")
+    void 라인업_조회_빈목록() throws Exception {
+        // given
+        given(eventService.getLineup()).willReturn(List.of());
+
+        // when & then
+        mockMvc.perform(get("/events/lineup"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 }

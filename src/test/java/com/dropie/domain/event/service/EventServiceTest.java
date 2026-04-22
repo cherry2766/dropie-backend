@@ -2,6 +2,7 @@ package com.dropie.domain.event.service;
 
 import com.dropie.domain.event.dto.response.EventDetailResponse;
 import com.dropie.domain.event.dto.response.EventListResponse;
+import com.dropie.domain.event.dto.response.LineupRoundResponse;
 import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.repository.EventRepository;
@@ -129,5 +130,81 @@ class EventServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.EVENT_NOT_FOUND);
+    }
+
+    // ===================== getLineup =====================
+
+    @Test
+    @DisplayName("라인업 조회 성공 — startAt/endAt이 같은 이벤트가 같은 차수로 묶임")
+    void 라인업_조회_성공_같은시간대_묶음() {
+        // given
+        LocalDateTime start1 = LocalDateTime.of(2026, 1, 10, 11, 0);
+        LocalDateTime end1   = LocalDateTime.of(2026, 3, 31, 23, 59);
+        LocalDateTime start2 = LocalDateTime.of(2026, 4, 1, 11, 0);
+        LocalDateTime end2   = LocalDateTime.of(2026, 12, 31, 23, 59);
+
+        // 1차: FINISHED 2개, 2차: OPEN 2개 — 같은 startAt/endAt끼리 묶여야 함
+        Event e1 = Event.builder().brandName("솔트버터").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
+        Event e2 = Event.builder().brandName("노아케이크").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
+        Event e3 = Event.builder().brandName("밀담제과").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
+        Event e4 = Event.builder().brandName("도넛클럽").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
+
+        given(eventRepository.findAllByOrderByStartAtAsc()).willReturn(List.of(e1, e2, e3, e4));
+
+        // when
+        List<LineupRoundResponse> result = eventService.getLineup();
+
+        // then
+        assertThat(result).hasSize(2);
+
+        // 1차: FINISHED, 브랜드 2개
+        assertThat(result.get(0).getRound()).isEqualTo(1);
+        assertThat(result.get(0).getStatus()).isEqualTo("FINISHED");
+        assertThat(result.get(0).getBrands()).containsExactly("솔트버터", "노아케이크");
+
+        // 2차: OPEN, 브랜드 2개
+        assertThat(result.get(1).getRound()).isEqualTo(2);
+        assertThat(result.get(1).getStatus()).isEqualTo("OPEN");
+        assertThat(result.get(1).getBrands()).containsExactly("밀담제과", "도넛클럽");
+    }
+
+    @Test
+    @DisplayName("라인업 조회 성공 — 이벤트가 없으면 빈 리스트 반환")
+    void 라인업_조회_이벤트없음_빈리스트() {
+        // given
+        given(eventRepository.findAllByOrderByStartAtAsc()).willReturn(List.of());
+
+        // when
+        List<LineupRoundResponse> result = eventService.getLineup();
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("라인업 조회 성공 — 차수 번호가 startAt 오름차순으로 1부터 순서대로 부여됨")
+    void 라인업_조회_차수번호_순서확인() {
+        // given
+        LocalDateTime start1 = LocalDateTime.of(2026, 1, 10, 11, 0);
+        LocalDateTime start2 = LocalDateTime.of(2026, 4, 1, 11, 0);
+        LocalDateTime start3 = LocalDateTime.of(2027, 1, 10, 11, 0);
+        LocalDateTime end1   = LocalDateTime.of(2026, 3, 31, 23, 59);
+        LocalDateTime end2   = LocalDateTime.of(2026, 12, 31, 23, 59);
+        LocalDateTime end3   = LocalDateTime.of(2027, 3, 31, 23, 59);
+
+        Event e1 = Event.builder().brandName("1차브랜드").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
+        Event e2 = Event.builder().brandName("2차브랜드").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
+        Event e3 = Event.builder().brandName("3차브랜드").startAt(start3).endAt(end3).status(EventStatus.UPCOMING).build();
+
+        given(eventRepository.findAllByOrderByStartAtAsc()).willReturn(List.of(e1, e2, e3));
+
+        // when
+        List<LineupRoundResponse> result = eventService.getLineup();
+
+        // then
+        assertThat(result).hasSize(3);
+        assertThat(result.get(0).getRound()).isEqualTo(1);
+        assertThat(result.get(1).getRound()).isEqualTo(2);
+        assertThat(result.get(2).getRound()).isEqualTo(3);
     }
 }
