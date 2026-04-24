@@ -46,6 +46,11 @@ class EmailVerificationServiceTest {
     @Mock
     private MimeMessage mimeMessage;
 
+    // HTML 본문을 Thymeleaf 템플릿으로 렌더링하는 공용 서비스 (리팩토링으로 추가된 의존성)
+    // → 단위 테스트에서는 실제 렌더링이 불필요하므로 Mock으로 처리
+    @Mock
+    private EmailTemplateService emailTemplateService;
+
     @BeforeEach
     void setUp() {
         // @Value("${spring.mail.username}")는 Spring 컨텍스트 없이 주입되지 않음
@@ -64,6 +69,9 @@ class EmailVerificationServiceTest {
         // given
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         given(mailSender.createMimeMessage()).willReturn(mimeMessage);
+        // 템플릿 렌더링 결과는 테스트 관심사가 아니므로 빈 HTML 문자열만 반환하도록 stub
+        // → MimeMessageHelper.setText()가 null을 받으면 NPE가 발생하므로 non-null 값 필수
+        given(emailTemplateService.render(anyString(), anyMap())).willReturn("<html></html>");
 
         // when
         emailVerificationService.sendVerificationEmail("test@email.com");
@@ -145,6 +153,8 @@ class EmailVerificationServiceTest {
         // given
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         given(mailSender.createMimeMessage()).willReturn(mimeMessage);
+        // 템플릿 렌더링 결과는 테스트 관심사가 아니므로 빈 HTML 문자열만 반환하도록 stub
+        given(emailTemplateService.render(anyString(), anyMap())).willReturn("<html></html>");
         // resend_cooltime 키 없음 → 재발송 가능한 상태
         given(redisTemplate.hasKey("resend_cooltime:test@email.com")).willReturn(false);
 

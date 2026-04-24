@@ -14,6 +14,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -23,6 +24,8 @@ public class EmailVerificationService {
 
     private final JavaMailSender mailSender;
     private final StringRedisTemplate redisTemplate;
+    // 메일 HTML 템플릿 렌더링 — HTML 문자열을 서비스에서 직접 조립하지 않기 위해 도입
+    private final EmailTemplateService emailTemplateService;
 
     // application.yml의 spring.mail.username 값을 주입
     // → Gmail 발신 계정 주소 (환경변수로 관리됨)
@@ -59,18 +62,18 @@ public class EmailVerificationService {
             helper.setFrom(new InternetAddress(fromEmail, "Dropie"));
             helper.setTo(email);
             helper.setSubject("[Dropie] 이메일 인증을 완료해주세요");
-            // true: HTML 이메일로 전송
-            // → plain text는 localhost URL을 클릭 가능한 링크로 변환하지 않음
-            // → <a href> 태그를 써야 어떤 메일 클라이언트에서도 클릭 가능
+            // 인증 링크는 백엔드를 거쳐 프론트로 리다이렉트되는 구조
+            // → 백엔드에서 토큰 검증 + emailVerified=true 업데이트 후 프론트 완료 페이지로 이동
             String verifyUrl = "http://localhost:8080/auth/verify-email?token=" + token;
-            String htmlContent = """
-                    <p>아래 버튼을 클릭하면 이메일 인증이 완료됩니다.</p>
-                    <p>
-                        <a href="%s">이메일 인증하기</a>
-                    </p>
-                    <p>링크는 30분간 유효합니다.</p>
-                    """.formatted(verifyUrl);
 
+            // HTML 본문은 Thymeleaf 템플릿(templates/email/email-verification.html)에서 렌더링
+            // → 서비스 코드에서 HTML 문자열을 직접 다루지 않아 디자인/문구 수정이 용이
+            String htmlContent = emailTemplateService.render(
+                    "email/email-verification",
+                    Map.of("verifyUrl", verifyUrl)
+            );
+
+            // true: HTML 이메일로 전송 (plain text는 링크 자동 렌더링이 안 되는 클라이언트 존재)
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
