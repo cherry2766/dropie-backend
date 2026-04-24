@@ -40,6 +40,8 @@ class PasswordResetServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private ValueOperations<String, String> valueOperations;
     @Mock private MimeMessage mimeMessage;
+    // HTML 본문을 Thymeleaf 템플릿으로 렌더링하는 공용 서비스 (리팩토링으로 추가된 의존성)
+    @Mock private EmailTemplateService emailTemplateService;
 
     @BeforeEach
     void setUp() {
@@ -65,6 +67,9 @@ class PasswordResetServiceTest {
         // sendResetEmail()이 내부에서 호출하므로 Redis·메일 stub 필요
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         given(mailSender.createMimeMessage()).willReturn(mimeMessage);
+        // 템플릿 렌더링 결과는 테스트 관심사가 아니므로 빈 HTML 문자열만 반환하도록 stub
+        // → MimeMessageHelper.setText()가 null을 받으면 NPE가 발생하므로 non-null 값 필수
+        given(emailTemplateService.render(anyString(), anyMap())).willReturn("<html></html>");
 
         // when
         passwordResetService.requestPasswordReset("test@email.com");
@@ -96,6 +101,8 @@ class PasswordResetServiceTest {
         // given
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         given(mailSender.createMimeMessage()).willReturn(mimeMessage);
+        // 템플릿 렌더링 결과는 테스트 관심사가 아니므로 빈 HTML 문자열만 반환하도록 stub
+        given(emailTemplateService.render(anyString(), anyMap())).willReturn("<html></html>");
 
         // when
         // @Async 메서드지만 단위 테스트에선 Spring 컨텍스트가 없으므로 동기로 실행됨

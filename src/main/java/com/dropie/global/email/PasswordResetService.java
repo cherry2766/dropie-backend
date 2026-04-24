@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -29,6 +30,8 @@ public class PasswordResetService {
     private final StringRedisTemplate redisTemplate;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    // 메일 HTML 템플릿 렌더링 — HTML 문자열을 서비스에서 직접 조립하지 않기 위해 도입
+    private final EmailTemplateService emailTemplateService;
 
     @Value("${spring.mail.username}")
     private String fromEmail;
@@ -72,15 +75,12 @@ public class PasswordResetService {
             // → 이메일 인증과 달리 비밀번호 재설정은 백엔드에서 리다이렉트할 이유가 없음
             // → 프론트가 URL의 token 파라미터를 꺼내서 confirm API를 직접 호출하는 구조가 더 깔끔함
             String resetUrl = "http://localhost:5173/reset-password?token=" + token;
-            String htmlContent = """
-                    <p>비밀번호 재설정을 요청하셨습니다.</p>
-                    <p>아래 버튼을 클릭해 새 비밀번호를 설정하세요.</p>
-                    <p>
-                        <a href="%s">비밀번호 재설정하기</a>
-                    </p>
-                    <p>링크는 30분간 유효합니다.</p>
-                    <p>본인이 요청하지 않았다면 이 메일을 무시해 주세요.</p>
-                    """.formatted(resetUrl);
+
+            // HTML 본문은 Thymeleaf 템플릿(templates/email/password-reset.html)에서 렌더링
+            String htmlContent = emailTemplateService.render(
+                    "email/password-reset",
+                    Map.of("resetUrl", resetUrl)
+            );
 
             // true: HTML 모드 활성화 — <a> 태그를 클릭 가능한 링크로 렌더링
             helper.setText(htmlContent, true);
