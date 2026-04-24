@@ -14,6 +14,11 @@ public class OrderResponse {
 
     private Long orderId;
     private String orderNumber;
+
+    // 대표 브랜드명 (첫 번째 OrderItem의 브랜드)
+    // 다중 브랜드 주문은 현재 스펙상 대표값만 노출
+    private String brandName;
+
     private int totalPrice;
     private OrderStatus status;
     private LocalDateTime createdAt;
@@ -22,6 +27,7 @@ public class OrderResponse {
         return OrderResponse.builder()
                 .orderId(order.getId())
                 .orderNumber(order.getOrderNumber())
+                .brandName(order.getRepresentativeBrandName())
                 .totalPrice(order.getTotalPrice())
                 .status(order.getStatus())
                 .createdAt(order.getCreatedAt())

@@ -132,7 +132,7 @@ public class OrderService {
         log.debug("[getMyOrders] userId={}, page={}, size={}", user.getId(), page, size);
 
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return PageResponse.from(orderRepository.findByUser(user, pageable).map(OrderResponse::from));
+        return PageResponse.from(orderRepository.findByUserWithBrands(user, pageable).map(OrderResponse::from));
     }
 
     // GET /orders/{orderId} — 주문 상세 조회

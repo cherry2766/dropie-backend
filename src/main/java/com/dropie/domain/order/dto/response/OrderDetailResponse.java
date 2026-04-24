@@ -28,6 +28,14 @@ public class OrderDetailResponse {
     public static class OrderItemDetail {
         private Long productId;
         private String productName;
+
+        // 상품 이미지 URL — 주문 상세에서 썸네일 표시용
+        private String imageUrl;
+
+        // 상품이 속한 이벤트의 브랜드명
+        // → 다중 브랜드 주문에서도 각 item이 어느 브랜드 소속인지 구분 가능
+        private String brandName;
+
         private int quantity;
         private int orderPrice;
 
@@ -35,6 +43,9 @@ public class OrderDetailResponse {
             return OrderItemDetail.builder()
                     .productId(item.getProduct().getId())
                     .productName(item.getProduct().getName())
+                    .imageUrl(item.getProduct().getImageUrl())
+                    // Repository에서 Event까지 fetch join해서 N+1 방지
+                    .brandName(item.getProduct().getEvent().getBrandName())
                     .quantity(item.getQuantity())
                     .orderPrice(item.getOrderPrice())
                     .build();
