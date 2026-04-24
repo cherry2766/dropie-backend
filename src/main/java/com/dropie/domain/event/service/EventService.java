@@ -4,6 +4,7 @@ import com.dropie.domain.event.dto.response.EventDetailResponse;
 import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.LineupRoundResponse;
 import com.dropie.domain.event.entity.Event;
+import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.dto.response.ProductResponse;
 import com.dropie.domain.product.repository.ProductRepository;
@@ -31,16 +32,20 @@ public class EventService {
     private final ProductRepository productRepository;
 
     // GET /events — 이벤트 목록 조회
+    // status가 null이면 전체 조회, 값이 있으면 해당 상태만 필터링
     // page는 API 스펙상 1-based이므로 PageRequest 생성 시 -1 해서 0-based로 변환
     // 최신 이벤트가 먼저 보이도록 id 내림차순 정렬
     @Transactional(readOnly = true)
-    public PageResponse<EventListResponse> getEvents(int page, int size) {
-        log.debug("[getEvents] page={}, size={}", page, size);
+    public PageResponse<EventListResponse> getEvents(int page, int size, EventStatus status) {
+        log.debug("[getEvents] page={}, size={}, status={}", page, size, status);
 
         PageRequest pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "id"));
 
-        Page<EventListResponse> result = eventRepository.findAll(pageable)
-                .map((EventListResponse::from)); // Event → EventListResponse 변환
+        // status 값 유무에 따라 다른 쿼리 실행
+        // null이면 전체 조회(기존 동작 유지), 아니면 상태 필터 조회
+        Page<EventListResponse> result = (status != null)
+                ? eventRepository.findByStatus(status, pageable).map(EventListResponse::from)
+                : eventRepository.findAll(pageable).map(EventListResponse::from);
 
         return PageResponse.from(result);
     }
