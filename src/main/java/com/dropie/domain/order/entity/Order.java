@@ -91,4 +91,23 @@ public class Order extends BaseEntity {
         }
         this.status = OrderStatus.PAID;
     }
+
+    /**
+     * 대표 브랜드명 반환 (목록 응답용)
+     * <p>
+     * - 첫 번째 OrderItem의 상품이 속한 이벤트의 brandName
+     * - 주문에 item이 없는 이상 케이스(이론상 발생 안 함)에는 null 반환
+     * <p>
+     * 한 주문에 여러 브랜드 상품이 섞인 경우에도 대표값 1개만 반환.
+     * 프론트에서 "외 N개" 표시가 필요하면 별도 brandCount 필드를 추가하는 방향으로 확장 가능.
+     */
+    public String getRepresentativeBrandName() {
+        if (orderItems == null || orderItems.isEmpty()) {
+            return null;
+        }
+        return orderItems.get(0)
+                .getProduct()
+                .getEvent()
+                .getBrandName();
+    }
 }

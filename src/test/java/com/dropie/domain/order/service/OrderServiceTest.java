@@ -423,7 +423,8 @@ class OrderServiceTest {
                     .build();
 
             // PageImpl: Spring의 Page 인터페이스 구현체 — 테스트에서 가짜 페이지 결과를 만들 때 사용
-            given(orderRepository.findByUser(eq(user), any(Pageable.class)))
+            // findByUserWithBrands: 브랜드명 필드 추가 이후 OrderItems + Product + Event까지 fetch join하는 쿼리
+            given(orderRepository.findByUserWithBrands(eq(user), any(Pageable.class)))
                     .willReturn(new PageImpl<>(List.of(order), PageRequest.of(0, 10), 1));
 
             // when
@@ -439,7 +440,7 @@ class OrderServiceTest {
         @DisplayName("주문 없음 — 빈 리스트 반환 (예외 없음)")
         void 주문_없는_유저_빈리스트_반환() {
             // given — 주문이 하나도 없는 유저
-            given(orderRepository.findByUser(eq(user), any(Pageable.class)))
+            given(orderRepository.findByUserWithBrands(eq(user), any(Pageable.class)))
                     .willReturn(Page.empty());
 
             // when
@@ -454,7 +455,7 @@ class OrderServiceTest {
         @DisplayName("page 1-based → 0-based 변환 확인 — page=2 요청 시 pageNumber=1로 변환")
         void 페이지_번호_변환_확인() {
             // given
-            given(orderRepository.findByUser(eq(user), any(Pageable.class)))
+            given(orderRepository.findByUserWithBrands(eq(user), any(Pageable.class)))
                     .willReturn(Page.empty());
 
             // when — 사용자는 page=2를 요청 (1-based)
@@ -462,7 +463,7 @@ class OrderServiceTest {
 
             // then — 내부적으로 DB에는 0-based로 변환되어 pageNumber=1이 전달되어야 함
             // API 스펙은 1-based이지만 JPA는 0-based라서 변환이 필요
-            then(orderRepository).should().findByUser(eq(user),
+            then(orderRepository).should().findByUserWithBrands(eq(user),
                     argThat(pageable -> pageable.getPageNumber() == 1));
         }
 
@@ -470,18 +471,87 @@ class OrderServiceTest {
         @DisplayName("최신순 정렬 확인 — createdAt DESC 정렬인지 검증")
         void 최신순_정렬_확인() {
             // given
-            given(orderRepository.findByUser(eq(user), any(Pageable.class)))
+            given(orderRepository.findByUserWithBrands(eq(user), any(Pageable.class)))
                     .willReturn(Page.empty());
 
             // when
             orderService.getMyOrders(userDetails, 1, 10);
 
             // then — 최신 주문이 먼저 오도록 createdAt 내림차순 정렬인지 확인
-            then(orderRepository).should().findByUser(eq(user),
+            then(orderRepository).should().findByUserWithBrands(eq(user),
                     argThat(pageable -> {
                         var sort = pageable.getSort().getOrderFor("createdAt");
                         return sort != null && sort.isDescending();
                     }));
+        }
+
+        @Test
+        @DisplayName("단일 브랜드 주문 목록 조회 — 응답에 대표 브랜드명 포함")
+        void 주문_목록_브랜드명_포함() {
+            // given — 한 주문이 한 브랜드(두바이도넛)의 상품만 담고 있는 일반적 케이스
+            Event event = Event.builder().brandName("두바이도넛").build();
+            Product product = Product.builder().event(event).build();
+            OrderItem item = OrderItem.builder().product(product).build();
+            Order order = Order.builder()
+                    .user(user)
+                    .orderItems(List.of(item))
+                    .build();
+
+            given(orderRepository.findByUserWithBrands(eq(user), any(Pageable.class)))
+                    .willReturn(new PageImpl<>(List.of(order)));
+
+            // when
+            PageResponse<OrderResponse> response = orderService.getMyOrders(userDetails, 1, 10);
+
+            // then — 응답에 brandName이 포함되고 첫 번째 item의 브랜드명이 나와야 함
+            assertThat(response.getContent()).hasSize(1);
+            assertThat(response.getContent().get(0).getBrandName()).isEqualTo("두바이도넛");
+        }
+
+        @Test
+        @DisplayName("다중 브랜드 주문 목록 조회 — 첫 번째 item의 브랜드만 대표로 반환")
+        void 다중_브랜드_주문_대표_브랜드만() {
+            // given — 한 주문에 서로 다른 브랜드 상품이 섞인 케이스
+            // 현재 설계상 "대표 브랜드" = 첫 번째 OrderItem의 브랜드
+            Event eventA = Event.builder().brandName("두바이도넛").build();
+            Event eventB = Event.builder().brandName("다른브랜드").build();
+            OrderItem item1 = OrderItem.builder()
+                    .product(Product.builder().event(eventA).build()).build();
+            OrderItem item2 = OrderItem.builder()
+                    .product(Product.builder().event(eventB).build()).build();
+            Order order = Order.builder()
+                    .user(user)
+                    .orderItems(List.of(item1, item2))
+                    .build();
+
+            given(orderRepository.findByUserWithBrands(eq(user), any(Pageable.class)))
+                    .willReturn(new PageImpl<>(List.of(order)));
+
+            // when
+            PageResponse<OrderResponse> response = orderService.getMyOrders(userDetails, 1, 10);
+
+            // then — 두 번째 브랜드(다른브랜드)는 응답에 나타나지 않고 대표값만 반환
+            assertThat(response.getContent().get(0).getBrandName()).isEqualTo("두바이도넛");
+        }
+
+        @Test
+        @DisplayName("orderItems가 비어있는 주문 — brandName은 null (방어 코드 검증)")
+        void 빈_orderItems_brandName_null() {
+            // given — 이론상 발생하지 않는 방어 케이스 (주문 생성 시 반드시 1개 이상의 item이 있음)
+            // Order.getRepresentativeBrandName()이 빈 리스트에서 NPE를 던지지 않고 null을 반환하는지 검증
+            Order order = Order.builder()
+                    .user(user)
+                    .orderItems(List.of())
+                    .build();
+
+            given(orderRepository.findByUserWithBrands(eq(user), any(Pageable.class)))
+                    .willReturn(new PageImpl<>(List.of(order)));
+
+            // when
+            PageResponse<OrderResponse> response = orderService.getMyOrders(userDetails, 1, 10);
+
+            // then — 예외 없이 null로 직렬화 가능한 상태로 응답
+            assertThat(response.getContent().get(0).getBrandName()).isNull();
         }
     }
 
@@ -525,6 +595,45 @@ class OrderServiceTest {
             // when & then
             assertThatThrownBy(() -> orderService.getOrderDetail(999L, userDetails))
                     .isInstanceOf(OrderNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("주문 상세 조회 — 각 item에 brandName과 imageUrl 포함")
+        void 주문_상세_item별_브랜드_이미지_포함() {
+            // given — 브랜드(두바이도넛) 이벤트의 상품(초코두바이도넛, 이미지 URL 보유) 1개 주문
+            Event event = Event.builder().brandName("두바이도넛").build();
+            Product product = Product.builder()
+                    .name("초코두바이도넛")
+                    .imageUrl("https://s3.../choco.jpg")
+                    .event(event)
+                    .build();
+            OrderItem item = OrderItem.builder()
+                    .product(product)
+                    .quantity(2)
+                    .orderPrice(11000)
+                    .build();
+            Order order = Order.builder()
+                    .id(1L)
+                    .user(user)
+                    .orderNumber("ORD-20260414-000001")
+                    .receiverName("홍길동")
+                    .phone("010-1234-5678")
+                    .address1("서울시 강남구")
+                    .totalPrice(11000)
+                    .status(OrderStatus.PAID)
+                    .orderItems(List.of(item))
+                    .build();
+
+            given(orderRepository.findByIdWithItems(1L)).willReturn(Optional.of(order));
+
+            // when
+            OrderDetailResponse response = orderService.getOrderDetail(1L, userDetails);
+
+            // then — 각 item에 brandName과 imageUrl이 응답 필드로 포함되어야 함
+            OrderDetailResponse.OrderItemDetail itemResult = response.getItems().get(0);
+            assertThat(itemResult.getBrandName()).isEqualTo("두바이도넛");
+            assertThat(itemResult.getImageUrl()).isEqualTo("https://s3.../choco.jpg");
+            assertThat(itemResult.getProductName()).isEqualTo("초코두바이도넛");
         }
 
         @Test

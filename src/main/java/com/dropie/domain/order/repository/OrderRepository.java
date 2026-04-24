@@ -12,15 +12,23 @@ import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    // 내 주문 목록 조회 — user 객체를 넘기면 JPA가 user_id 조건으로 변환
-    Page<Order> findByUser(User user, Pageable pageable);
+    // 내 주문 목록 조회
+    // → OrderItems + Product + Event 까지 한 번에 조회해 브랜드명 접근 시 N+1 방지
+    // → DISTINCT: OrderItems ToMany 조인으로 같은 Order row가 중복 등장하는 걸 제거
+    // → countQuery 분리: fetch join이 포함된 쿼리로는 count를 할 수 없으므로 단순 count 쿼리로 페이지 메타 계산
+    @Query(value = "SELECT DISTINCT o FROM Order o " +
+            "LEFT JOIN FETCH o.orderItems oi " +
+            "LEFT JOIN FETCH oi.product p " +
+            "LEFT JOIN FETCH p.event " +
+            "WHERE o.user = :user",
+            countQuery = "SELECT COUNT(o) FROM Order o WHERE o.user = :user")
+    Page<Order> findByUserWithBrands(@Param("user") User user, Pageable pageable);
 
-    // 주문 상세/취소 조회 시 N+1 방지용 fetch join
-    // OrderItem 조회 시 Product도 한 번에 가져옴
-    // LEFT JOIN FETCH: orderItems가 없는 주문도 누락 없이 조회
+    // 주문 상세 조회
     @Query("SELECT o FROM Order o " +
             "LEFT JOIN FETCH o.orderItems oi " +
-            "LEFT JOIN FETCH oi.product " +
+            "LEFT JOIN FETCH oi.product p " +
+            "LEFT JOIN FETCH p.event " +
             "WHERE o.id = :orderId")
     Optional<Order> findByIdWithItems(@Param("orderId") Long orderId);
 
