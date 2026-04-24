@@ -3,6 +3,7 @@ package com.dropie.domain.event.controller;
 import com.dropie.domain.event.dto.response.EventDetailResponse;
 import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.LineupRoundResponse;
+import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.service.EventService;
 import com.dropie.global.common.PageResponse;
 import jakarta.validation.constraints.Min;
@@ -23,16 +24,18 @@ public class EventController {
 
     private final EventService eventService;
 
-    // GET /events?page=1&size=6
-    // 쿼리 파라미터 없으면 defaultValue로 기본값 적용
+    // GET /events?page=1&size=6&status=OPEN
+    // status는 선택값(required = false) — 없으면 전체 조회, 있으면 해당 상태만 필터링
+    // EventStatus enum 타입으로 선언하면 Spring이 문자열 "OPEN"을 자동으로 변환해줌
     // 인증 없이 접근 가능 (메인 페이지는 비로그인도 볼 수 있어야 함)
     @GetMapping
     public ResponseEntity<PageResponse<EventListResponse>> getEvents(
             @RequestParam(defaultValue = "1") @Min(1) int page,
-            @RequestParam(defaultValue = "6") @Min(1) int size
+            @RequestParam(defaultValue = "6") @Min(1) int size,
+            @RequestParam(required = false) EventStatus status
     ) {
-        log.debug("[GET /events] page={}, size={}", page, size);
-        return ResponseEntity.ok(eventService.getEvents(page, size));
+        log.debug("[GET /events] page={}, size={}, status={}", page, size, status);
+        return ResponseEntity.ok(eventService.getEvents(page, size, status));
     }
 
     // GET /events/{eventId}?page=1&size=5

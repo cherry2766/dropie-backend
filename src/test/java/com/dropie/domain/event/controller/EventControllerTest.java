@@ -83,7 +83,8 @@ class EventControllerTest {
                 .totalPages(1)
                 .build();
 
-        given(eventService.getEvents(1, 6)).willReturn(response);
+        // status 파라미터 없으면 null로 전달됨
+        given(eventService.getEvents(1, 6, null)).willReturn(response);
 
         // when & then
         mockMvc.perform(get("/events")
@@ -94,6 +95,44 @@ class EventControllerTest {
                 .andExpect(jsonPath("$.content[0].brandName").value("노티드"))
                 .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /events?status=OPEN - 상태 필터 파라미터 전달 시 서비스에 OPEN이 넘어가고 필터된 결과 반환")
+    void 이벤트_목록_상태_필터_조회_성공() throws Exception {
+        // given
+        PageResponse<EventListResponse> response = PageResponse.<EventListResponse>builder()
+                .content(List.of(
+                        EventListResponse.builder()
+                                .id(1L)
+                                .brandName("노티드")
+                                .status(EventStatus.OPEN)
+                                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
+                                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                                .build()
+                ))
+                .page(1).size(6).totalElements(1).totalPages(1)
+                .build();
+
+        given(eventService.getEvents(1, 6, EventStatus.OPEN)).willReturn(response);
+
+        // when & then
+        mockMvc.perform(get("/events")
+                        .param("page", "1")
+                        .param("size", "6")
+                        .param("status", "OPEN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("OPEN"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /events?status=INVALID - 존재하지 않는 상태값 입력 시 400 반환")
+    void 이벤트_목록_잘못된_상태값_400() throws Exception {
+        // EventStatus enum에 없는 값이면 Spring이 변환 실패로 자동 400 반환
+        mockMvc.perform(get("/events")
+                        .param("status", "INVALID"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

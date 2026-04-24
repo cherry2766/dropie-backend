@@ -84,12 +84,34 @@ class EventServiceTest {
         given(eventRepository.findAll(any(PageRequest.class))).willReturn(eventPage);
 
         // when
-        PageResponse<EventListResponse> result = eventService.getEvents(1, 6);
+        // status=null이면 전체 조회 경로 실행
+        PageResponse<EventListResponse> result = eventService.getEvents(1, 6, null);
 
         // then
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getBrandName()).isEqualTo("노티드");
         assertThat(result.getPage()).isEqualTo(1);  // 1-based로 반환되는지 확인
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("이벤트 목록 조회 성공 - status 필터 적용 시 findByStatus가 호출되고 해당 상태만 반환")
+    void 이벤트_목록_상태_필터_조회_성공() {
+        // given
+        Page<Event> eventPage = new PageImpl<>(
+                List.of(event),
+                PageRequest.of(0, 6),
+                1
+        );
+        // status=OPEN으로 필터링하면 findByStatus가 호출되어야 함
+        given(eventRepository.findByStatus(eq(EventStatus.OPEN), any(PageRequest.class))).willReturn(eventPage);
+
+        // when
+        PageResponse<EventListResponse> result = eventService.getEvents(1, 6, EventStatus.OPEN);
+
+        // then
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getStatus()).isEqualTo(EventStatus.OPEN);
         assertThat(result.getTotalElements()).isEqualTo(1);
     }
 
