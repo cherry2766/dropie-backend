@@ -48,9 +48,10 @@ public class Order extends BaseEntity {
 
     private String deliveryMemo;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private OrderStatus status;
+    private OrderStatus status = OrderStatus.PENDING;
 
     // CascadeType.ALL: Order 저장 시 OrderItem도 함께 저장/삭제됨
     // orphanRemoval: Order에서 제거된 OrderItem은 DB에서도 삭제됨
@@ -76,5 +77,18 @@ public class Order extends BaseEntity {
     // 최종 총 금액 반영 — 주문 상품 루프가 끝난 후 계산된 금액을 덮어씀
     public void updateTotalPrice(int totalPrice) {
         this.totalPrice = totalPrice;
+    }
+
+    /**
+     * 결제 완료 처리 — PENDING → PAID
+     * <p>
+     * PENDING 상태가 아닌 주문에 confirm을 시도하면 예외를 던짐
+     * 이미 PAID거나 CANCELED된 주문은 다시 결제 처리할 수 없음
+     */
+    public void confirm() {
+        if (this.status != OrderStatus.PENDING) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_PENDING);
+        }
+        this.status = OrderStatus.PAID;
     }
 }

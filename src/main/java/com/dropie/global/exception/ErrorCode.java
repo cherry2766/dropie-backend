@@ -73,7 +73,14 @@ public enum ErrorCode {
     // 비밀번호 재설정
     // 토큰이 없거나(만료 포함) 유효하지 않을 때 동일한 에러로 처리
     // → 만료 vs 위조를 구분하면 공격자에게 힌트가 될 수 있으므로 하나로 통일
-    PASSWORD_RESET_TOKEN_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 링크입니다.");
+    PASSWORD_RESET_TOKEN_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 링크입니다."),
+
+    // 결제
+    PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "결제 처리 중 오류가 발생했습니다."),
+    PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "결제 금액이 주문 금액과 일치하지 않습니다."),
+    ORDER_NOT_PENDING(HttpStatus.BAD_REQUEST, "결제 대기 상태의 주문만 결제할 수 있습니다."),
+    PAYMENT_ALREADY_PROCESSED(HttpStatus.CONFLICT, "이미 처리된 결제입니다."),
+    ORDER_ACCESS_DENIED(HttpStatus.FORBIDDEN, "해당 주문에 접근할 권한이 없습니다.");
 
     private final HttpStatus status;
     private final String message;
