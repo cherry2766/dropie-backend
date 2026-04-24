@@ -8,6 +8,8 @@ import com.dropie.domain.order.dto.response.OrderResponse;
 import com.dropie.domain.order.entity.OrderStatus;
 import com.dropie.domain.order.service.CreateOrderUseCase;
 import com.dropie.domain.order.service.OrderService;
+import com.dropie.domain.payment.dto.response.PaymentConfirmResponse;
+import com.dropie.domain.payment.service.PaymentService;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
 import com.dropie.global.common.PageResponse;
@@ -74,6 +76,9 @@ class OrderControllerTest {
     // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
+
+    @MockitoBean
+    private PaymentService paymentService;
 
     @BeforeEach
     void setUp() {
@@ -537,5 +542,93 @@ class OrderControllerTest {
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         }
+    }
+
+    @Test
+    @DisplayName("POST /orders/{orderId}/payment/confirm - 성공 시 200과 PAID 응답 반환")
+    void 결제_확인_API_성공() throws Exception {
+        // given
+        PaymentConfirmResponse response = PaymentConfirmResponse.builder()
+                .orderId(1L)
+                .orderNumber("ORD-20260421-000001")
+                .status("PAID")
+                .paymentKey("payKey123")
+                .amount(5500)
+                .method("카드")
+                .approvedAt(LocalDateTime.now())
+                .build();
+
+        given(paymentService.confirmPayment(any(), any(), any())).willReturn(response);
+
+        // when & then
+        mockMvc.perform(post("/orders/1/payment/confirm")
+                        .with(user(mockUserDetails()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "paymentKey": "payKey123",
+                                "amount": 5500
+                            }
+                            """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"))
+                .andExpect(jsonPath("$.paymentKey").value("payKey123"))
+                .andExpect(jsonPath("$.amount").value(5500));
+    }
+
+    @Test
+    @DisplayName("POST /orders/{orderId}/payment/confirm - 금액 불일치 시 400")
+    void 결제_확인_금액불일치_API() throws Exception {
+        // given
+        given(paymentService.confirmPayment(any(), any(), any()))
+                .willThrow(new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH));
+
+        // when & then
+        mockMvc.perform(post("/orders/1/payment/confirm")
+                        .with(user(mockUserDetails()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "paymentKey": "payKey123",
+                                "amount": 9999
+                            }
+                            """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PAYMENT_AMOUNT_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("POST /orders/{orderId}/payment/confirm - 미인증 시 401")
+    void 결제_확인_미인증() throws Exception {
+        mockMvc.perform(post("/orders/1/payment/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "paymentKey": "payKey123",
+                                "amount": 5500
+                            }
+                            """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("POST /orders/{orderId}/payment/confirm - 토스 결제 실패 시 400")
+    void 결제_확인_토스실패_API() throws Exception {
+        // given
+        given(paymentService.confirmPayment(any(), any(), any()))
+                .willThrow(new BusinessException(ErrorCode.PAYMENT_FAILED));
+
+        // when & then
+        mockMvc.perform(post("/orders/1/payment/confirm")
+                        .with(user(mockUserDetails()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "paymentKey": "payKey123",
+                                "amount": 5500
+                            }
+                            """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PAYMENT_FAILED"));
     }
 }

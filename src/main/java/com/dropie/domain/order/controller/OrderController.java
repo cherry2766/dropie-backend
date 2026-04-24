@@ -7,6 +7,9 @@ import com.dropie.domain.order.dto.response.OrderDetailResponse;
 import com.dropie.domain.order.dto.response.OrderResponse;
 import com.dropie.domain.order.service.CreateOrderUseCase;
 import com.dropie.domain.order.service.OrderService;
+import com.dropie.domain.payment.dto.request.PaymentConfirmRequest;
+import com.dropie.domain.payment.dto.response.PaymentConfirmResponse;
+import com.dropie.domain.payment.service.PaymentService;
 import com.dropie.global.common.PageResponse;
 import com.dropie.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -28,6 +31,7 @@ public class OrderController {
 
     private final OrderService orderService; // 조회/취소 (락 불필요)
     private final CreateOrderUseCase createOrderUseCase; // 주문 등록 전용 (락 Facade가 주입됨)
+    private final PaymentService paymentService;
 
     // POST /orders — 주문 등록
     // @AuthenticationPrincipal: Security 컨텍스트에서 현재 로그인 유저 꺼냄
@@ -68,5 +72,22 @@ public class OrderController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         log.debug("[PATCH /orders/{}/cancel]", orderId);
         return ResponseEntity.ok(orderService.cancelOrder(orderId, userDetails));
+    }
+
+    /**
+     * 결제 확인 (토스 승인 + 주문 PAID 전환)
+     * <p>
+     * 프론트가 토스 결제창 완료 후 받은 paymentKey와 amount를 백엔드로 보내면,
+     * 백엔드가 토스 서버에 직접 승인 요청을 보내서 이중 검증함.
+     */
+    @PostMapping("/{orderId}/payment/confirm")
+    public ResponseEntity<PaymentConfirmResponse> confirmPayment(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long orderId,
+            @RequestBody @Valid PaymentConfirmRequest request) {
+
+        return ResponseEntity.ok(
+                paymentService.confirmPayment(userDetails.getUsername(), orderId, request)
+        );
     }
 }
