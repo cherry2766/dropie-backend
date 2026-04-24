@@ -40,8 +40,12 @@ public class TossPaymentClient {
         String encodedKey = Base64.getEncoder()
                 .encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
 
+        // 요청 로그 INFO: 토스 API 호출 직전 (secretKey/카드정보 등 민감값은 절대 로깅하지 않음)
+        log.info("[TossPaymentClient] 승인 요청 - paymentKey={}, orderId={}, amount={}",
+                paymentKey, orderId, amount);
+
         try {
-            return RestClient.create()
+            TossConfirmResponse response = RestClient.create()
                     .post()
                     .uri(TOSS_CONFIRM_URL)
                     .header(HttpHeaders.AUTHORIZATION, "Basic " + encodedKey)
@@ -53,9 +57,15 @@ public class TossPaymentClient {
                     ))
                     .retrieve()
                     .body(TossConfirmResponse.class);
+
+            // 응답 로그 INFO: 토스로부터 정상 응답 수신 확인
+            log.info("[TossPaymentClient] 승인 응답 수신 - paymentKey={}, method={}, totalAmount={}, approvedAt={}",
+                    response.getPaymentKey(), response.getMethod(),
+                    response.getTotalAmount(), response.getApprovedAt());
+            return response;
         } catch (Exception e) {
             // 네트워크 오류, 토스 측 오류(잔액 부족, 한도 초과 등) 모두 포함
-            log.error("[TossPaymentClient] 결제 승인 실패 — paymentKey: {}, error: {}",
+            log.error("[TossPaymentClient] 결제 승인 실패 - paymentKey={}, error={}",
                     paymentKey, e.getMessage());
             throw new BusinessException(ErrorCode.PAYMENT_FAILED);
         }
