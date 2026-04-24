@@ -40,7 +40,10 @@ public class OrderController {
     public ResponseEntity<OrderCreateResponse> createOrder(
             @RequestBody @Valid CreateOrderRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        log.debug("[POST /orders] userId={}", userDetails.getUser().getId());
+        // 진입 로그 INFO: 요청이 백엔드에 도달했는지 1차 확인용
+        // → 인증 필터까지 통과했다는 의미이므로 401 이슈 추적에도 도움됨
+        log.info("[POST /orders] 진입 - userId={}, itemCount={}",
+                userDetails.getUser().getId(), request.getItems().size());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(createOrderUseCase.createOrder(request, userDetails));
     }
@@ -85,6 +88,10 @@ public class OrderController {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long orderId,
             @RequestBody @Valid PaymentConfirmRequest request) {
+        // 진입 로그 INFO: 프론트가 토스 결제 완료 후 백엔드 검증을 호출했는지 1차 확인
+        // → 이 로그조차 안 찍히면 JWT 필터/Security에서 막히거나 프론트에서 호출 자체가 안 된 것
+        log.info("[POST /orders/{}/payment/confirm] 진입 - userId={}, amount={}",
+                orderId, userDetails.getUser().getId(), request.getAmount());
 
         return ResponseEntity.ok(
                 paymentService.confirmPayment(userDetails.getUsername(), orderId, request)

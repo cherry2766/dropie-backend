@@ -45,13 +45,25 @@ public class PaymentService {
      */
     @Transactional
     public PaymentConfirmResponse confirmPayment(String email, Long orderId, PaymentConfirmRequest request) {
+        // 서비스 진입 로그 INFO: 컨트롤러 → 서비스 호출 연결 확인
+        log.info("[confirmPayment] 진입 - email={}, orderId={}, amount={}",
+                email, orderId, request.getAmount());
 
         // 1. 주문 조회
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(OrderNotFoundException::new);
+                .orElseThrow(() -> {
+                    // WARN: 존재하지 않는 주문에 대한 결제 시도 (프론트 버그 or 악의적 요청 의심)
+                    log.warn("[confirmPayment] 주문 없음 - orderId={}", orderId);
+                    return new OrderNotFoundException();
+                });
+        log.debug("[confirmPayment] 주문 조회 완료 - orderId={}, status={}, totalPrice={}, ownerEmail={}",
+                order.getId(), order.getStatus(), order.getTotalPrice(), order.getUser().getEmail());
 
         // 본인 주문인지 확인 - 다른 사람의 주문 결제 시도 방어
         if (!order.getUser().getEmail().equals(email)) {
+            // WARN: 타인의 주문을 결제하려 한 이상 접근
+            log.warn("[confirmPayment] 본인 주문 아님 - requesterEmail={}, ownerEmail={}",
+                    email, order.getUser().getEmail());
             throw new BusinessException(ErrorCode.ORDER_ACCESS_DENIED);
         }
 
@@ -60,22 +72,31 @@ public class PaymentService {
         if (order.getStatus() == OrderStatus.PAID) {
             Payment existingPayment = paymentRepository.findByOrder(order)
                     .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_ALREADY_PROCESSED));
-            log.info("[PaymentService] 이미 처리된 결제 재요청 — orderId: {}", orderId);
+            log.info("[confirmPayment] 이미 처리된 결제 재요청 - orderId={}", orderId);
             return PaymentConfirmResponse.of(order, existingPayment);
         }
 
         // 3. PENDING 상태 확인 (CANCELED 등 다른 상태면 결제 불가)
         if (order.getStatus() != OrderStatus.PENDING) {
+            // WARN: 취소됐거나 이상 상태의 주문에 대한 결제 시도
+            log.warn("[confirmPayment] PENDING 아님 - orderId={}, currentStatus={}",
+                    orderId, order.getStatus());
             throw new BusinessException(ErrorCode.ORDER_NOT_PENDING);
         }
 
         // 4. 금액 검증 - 클라이언트 측 금액 변조 공격 방어
         if (order.getTotalPrice() != request.getAmount()) {
+            // WARN: 프론트에서 변조됐거나 프론트 계산 버그 가능성
+            log.warn("[confirmPayment] 금액 불일치 - orderId={}, expected={}, actual={}",
+                    orderId, order.getTotalPrice(), request.getAmount());
             throw new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH);
         }
+        log.debug("[confirmPayment] 금액 검증 통과 - amount={}", order.getTotalPrice());
 
         // 5. 토스 결제 승인 API 호출
         // 실패 시 try-catch 안에서 주문 취소 + 재고 복원
+        log.info("[confirmPayment] 토스 승인 API 호출 시작 - orderNumber={}, amount={}",
+                order.getOrderNumber(), request.getAmount());
         TossConfirmResponse tossResponse;
         try {
             tossResponse = tossPaymentClient.confirm(
@@ -88,6 +109,8 @@ public class PaymentService {
             rollbackOrder(order);
             throw e;
         }
+        log.info("[confirmPayment] 토스 승인 API 응답 수신 - paymentKey={}, method={}, approvedAt={}",
+                tossResponse.getPaymentKey(), tossResponse.getMethod(), tossResponse.getApprovedAt());
 
         // 6. 주문 상태 PAID로 변경 + 결제 정보 저장
         order.confirm();  // PENDING → PAID
@@ -101,8 +124,8 @@ public class PaymentService {
                 .build();
         paymentRepository.save(payment);
 
-        log.info("[PaymentService] 결제 완료 — orderId: {}, paymentKey: {}",
-                orderId, payment.getPaymentKey());
+        log.info("[confirmPayment] 결제 완료 - orderId={}, paymentKey={}, amount={}",
+                orderId, payment.getPaymentKey(), payment.getAmount());
         return PaymentConfirmResponse.of(order, payment);
     }
 
