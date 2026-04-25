@@ -35,7 +35,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
@@ -46,9 +45,12 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final StringRedisTemplate redisTemplate;
 
-    // 주문번호 시퀀스 — 서버 재시작 시 초기화되므로 개발/테스트 목적
-    // 프로덕션에서는 DB 시퀀스나 Redis로 대체 필요
-    private final AtomicInteger orderSequence = new AtomicInteger(0);
+    // 주문번호 시퀀스 키 prefix — 일자별로 키가 분리됨 (예: order:seq:20260425)
+    // → Redis INCR이 원자적으로 1씩 증가시키며, 같은 시퀀스가 두 번 발급되지 않음
+    // → 서버 재시작/다중 인스턴스 환경에서도 시퀀스가 Redis에 보존되어 안전
+    private static final String ORDER_SEQ_KEY_PREFIX = "order:seq:";
+    // 시퀀스 키 TTL — 자정 이후엔 새 날짜 키로 전환되므로 어제 키는 자동 만료시켜 메모리 누수 방지
+    private static final Duration ORDER_SEQ_TTL = Duration.ofDays(2);
 
     // 주문 TTL 상수
     private static final String PENDING_ORDER_KEY_PREFIX = "pending_order:";
@@ -245,11 +247,20 @@ public class OrderService {
     }
 
     // 주문번호 생성 — "ORD-YYYYMMDD-000001" 형식
-    // AtomicInteger는 스레드 안전하지만 서버 재시작 시 초기화됨
-    // 프로덕션에서는 DB 시퀀스 또는 Redis incr 명령으로 대체 필요
+    // Redis INCR을 사용해 원자적으로 시퀀스를 발급
+    // → 단일 스레드 모델인 Redis 특성상 같은 시퀀스가 두 번 발급되지 않음
+    // → 서버 재시작/다중 인스턴스에서도 Redis에 상태가 보존되어 중복 충돌 없음
+    // → 키가 처음 생성될 때(반환값이 1)에만 TTL을 걸어 다음날 자동 정리되도록 함
     private String generateOrderNumber() {
         String date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        int seq = orderSequence.incrementAndGet();
+        String key = ORDER_SEQ_KEY_PREFIX + date;
+
+        Long seq = redisTemplate.opsForValue().increment(key);
+        // increment()는 키가 없으면 0에서 시작해 1을 반환 → 그 시점에만 TTL을 걸어주면 매번 expire를 호출하지 않아도 됨
+        if (seq != null && seq == 1L) {
+            redisTemplate.expire(key, ORDER_SEQ_TTL);
+        }
+
         return String.format("ORD-%s-%06d", date, seq);
     }
 }
