@@ -1,5 +1,6 @@
 package com.dropie;
 
+import com.dropie.domain.order.listener.PendingOrderExpirationListener;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RedissonClient;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,6 +20,11 @@ class DropieApplicationTests {
 
 	@MockitoBean
 	private RedissonClient redissonClient;
+
+	// PendingOrderExpirationListener는 부모(KeyExpirationEventMessageListener)의 afterPropertiesSet()이
+	// RedisConnectionFactory.getConnection()을 호출함 → mock 처리한 RedissonClient 때문에 NPE 발생
+	@MockitoBean
+	private PendingOrderExpirationListener pendingOrderExpirationListener;
 
 	@Test
 	void contextLoads() {

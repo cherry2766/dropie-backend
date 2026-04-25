@@ -1,13 +1,18 @@
 package com.dropie.domain.order.repository;
 
 import com.dropie.domain.order.entity.Order;
+import com.dropie.domain.order.entity.OrderStatus;
 import com.dropie.domain.user.entity.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
@@ -31,6 +36,21 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "LEFT JOIN FETCH p.event " +
             "WHERE o.id = :orderId")
     Optional<Order> findByIdWithItems(@Param("orderId") Long orderId);
+
+    // 자동 취소 처리 시 동시성 방어를 위한 비관적 락 조회
+    // → SELECT ... FOR UPDATE
+    // → confirmPayment 쪽도 동일 락으로 조회하도록 변경하면 완전한 직렬화 가능
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :orderId")
+    Optional<Order> findByIdForUpdate(@Param("orderId") Long orderId);
+
+    // 배치용: 오래된 PENDING 주문의 id만 조회
+// → fetch join이나 전체 엔티티 로딩을 피해 메모리 부담 최소화
+    @Query("SELECT o.id FROM Order o " +
+            "WHERE o.status = :status AND o.createdAt < :threshold")
+    List<Long> findStalePendingOrderIds(
+            @Param("status") OrderStatus status,
+            @Param("threshold") LocalDateTime threshold);
 
     // 테스트용 쿼리 추가
     @Query("""
