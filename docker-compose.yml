@@ -4,6 +4,9 @@ services:
     container_name: dropie-redis
     ports:
       - "6379:6379"
+    # TTL 만료(expired) 이벤트 발생 설정 (영구 적용)
+    # → 키 만료 시 후처리 로직 트리거용
+    command: redis-server --notify-keyspace-events Ex
     # restart: unless-stopped  # 나중에 서버 배포 시 주석 해제 (컨테이너 자동 재시작)
 
   # 로컬에 MySQL이 이미 설치되어 있어 3306 포트 충돌 방지를 위해 3307로 매핑

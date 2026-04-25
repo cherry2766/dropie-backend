@@ -4,6 +4,7 @@ import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.order.dto.request.CreateOrderRequest;
+import com.dropie.domain.order.listener.PendingOrderExpirationListener;
 import com.dropie.domain.order.repository.OrderItemRepository;
 import com.dropie.domain.order.repository.OrderRepository;
 import com.dropie.domain.product.entity.Product;
@@ -60,6 +61,12 @@ class OptimisticLockConcurrencyTest {
     // EmailVerificationService가 필요로 하는 JavaMailSender — 테스트 환경에서 실제 메일 서버 없이 컨텍스트 로드 가능하게 Mock 처리
     @MockitoBean
     private JavaMailSender javaMailSender;
+
+    // PendingOrderExpirationListener는 부모(KeyExpirationEventMessageListener)의 afterPropertiesSet()이
+    // RedisConnectionFactory.getConnection()을 호출함 → mock 처리한 RedissonClient 때문에 NPE 발생
+    // 동시성 테스트에서는 만료 리스너가 불필요하므로 빈 자체를 Mock으로 대체
+    @MockitoBean
+    private PendingOrderExpirationListener pendingOrderExpirationListener;
 
     private static final int INITIAL_STOCK = 50;
     private static final int THREAD_COUNT = 100;

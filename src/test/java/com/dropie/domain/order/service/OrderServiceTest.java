@@ -27,6 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,6 +35,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -64,6 +66,12 @@ class OrderServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+
+    // OrderService.createOrder()가 redisTemplate.opsForValue().set(...)을 호출함
+    // RETURNS_DEEP_STUBS: opsForValue() 같은 체이닝 호출도 자동으로 mock 반환 → NPE 방지
+    // (실제 try-catch로 감싸져 있어 NPE가 발생해도 테스트는 통과하지만, 로그 오염 방지를 위해 모킹)
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private StringRedisTemplate redisTemplate;
 
     // 각 테스트에서 공통으로 쓰는 객체들
     private User user;

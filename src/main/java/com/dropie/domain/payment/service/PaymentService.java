@@ -16,6 +16,7 @@ import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.exception.custom.OrderNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,17 +32,20 @@ public class PaymentService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final TossPaymentClient tossPaymentClient;
+    private final StringRedisTemplate redisTemplate;
+    private static final String PENDING_ORDER_KEY_PREFIX = "pending_order:";
 
     /**
      * 토스 결제 확인(승인) 처리
      * <p>
      * 처리 순서:
-     * 1. 주문 조회 + 본인 주문 확인
+     * 1. 주문 조회 (비관적 락) + 본인 주문 확인
      * 2. 멱등성 체크 — 이미 PAID면 기존 결과 반환 (중복 요청 방어)
      * 3. PENDING 상태 확인 (CANCELED된 주문은 결제 불가)
      * 4. 금액 검증 — 프론트에서 변조했을 가능성 방어
-     * 5. 토스 승인 API 호출 (실패 시 자동 롤백)
-     * 6. 주문 PAID + Payment 저장
+     * 5. 자동 취소 TTL 키 선삭제 — 만료 이벤트 발화 차단
+     * 6. 토스 승인 API 호출 (실패 시 자동 롤백)
+     * 7. 주문 PAID + Payment 저장
      */
     @Transactional
     public PaymentConfirmResponse confirmPayment(String email, Long orderId, PaymentConfirmRequest request) {
@@ -50,12 +54,14 @@ public class PaymentService {
                 email, orderId, request.getAmount());
 
         // 1. 주문 조회
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> {
                     // WARN: 존재하지 않는 주문에 대한 결제 시도 (프론트 버그 or 악의적 요청 의심)
                     log.warn("[confirmPayment] 주문 없음 - orderId={}", orderId);
                     return new OrderNotFoundException();
                 });
+
+
         log.debug("[confirmPayment] 주문 조회 완료 - orderId={}, status={}, totalPrice={}, ownerEmail={}",
                 order.getId(), order.getStatus(), order.getTotalPrice(), order.getUser().getEmail());
 
@@ -93,7 +99,14 @@ public class PaymentService {
         }
         log.debug("[confirmPayment] 금액 검증 통과 - amount={}", order.getTotalPrice());
 
-        // 5. 토스 결제 승인 API 호출
+        // 5. 자동 취소 TTL 키 삭제
+        // → 결제 확정 흐름에 들어왔으므로 만료 이벤트가 더는 발화되지 않게 선제 차단
+        // → 만약 여기 도달 직전에 이미 만료 이벤트가 발행됐더라도, autoCancelIfPending() 쪽도
+        //    동일한 findByIdForUpdate() 비관적 락을 사용하므로 같은 row 경합이 직렬화되어 안전
+        redisTemplate.delete(PENDING_ORDER_KEY_PREFIX + orderId);
+        log.debug("[confirmPayment] 자동 취소 TTL 키 삭제 - orderId={}", orderId);
+
+        // 6. 토스 결제 승인 API 호출
         // 실패 시 try-catch 안에서 주문 취소 + 재고 복원
         log.info("[confirmPayment] 토스 승인 API 호출 시작 - orderNumber={}, amount={}",
                 order.getOrderNumber(), request.getAmount());
@@ -112,7 +125,7 @@ public class PaymentService {
         log.info("[confirmPayment] 토스 승인 API 응답 수신 - paymentKey={}, method={}, approvedAt={}",
                 tossResponse.getPaymentKey(), tossResponse.getMethod(), tossResponse.getApprovedAt());
 
-        // 6. 주문 상태 PAID로 변경 + 결제 정보 저장
+        // 7. 주문 상태 PAID로 변경 + 결제 정보 저장
         order.confirm();  // PENDING → PAID
 
         Payment payment = Payment.builder()
@@ -131,7 +144,7 @@ public class PaymentService {
 
     /**
      * 결제 실패 시 롤백 처리
-     * <p>
+     *
      * 주문 생성(POST /orders) 단계에서 재고를 이미 감소시켰으므로,
      * 결제 실패 시 반드시 재고를 되돌려야 다음 구매자가 살 수 있음.
      */

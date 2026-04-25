@@ -25,9 +25,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
@@ -42,10 +44,20 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final StringRedisTemplate redisTemplate;
 
     // 주문번호 시퀀스 — 서버 재시작 시 초기화되므로 개발/테스트 목적
     // 프로덕션에서는 DB 시퀀스나 Redis로 대체 필요
     private final AtomicInteger orderSequence = new AtomicInteger(0);
+
+    // 주문 TTL 상수
+    private static final String PENDING_ORDER_KEY_PREFIX = "pending_order:";
+    // ★ TTL을 15분으로 설정한 이유:
+    //   - 토스 결제창 자체 타임아웃이 15분 → 그보다 짧게 잡으면
+    //     정상 결제한 유저의 주문이 자동 취소되는 모순이 발생
+    //   - 선착순 드롭 특성상 짧게 가져가고 싶지만
+    //     사용자 신뢰를 우선해 토스와 동일하게 15분으로 설정
+    private static final Duration PENDING_ORDER_TTL = Duration.ofMinutes(15);
 
     // POST /orders — 주문 등록
     // 흐름: 상품 조회 → 이벤트 판매 시간 검증 → 재고 차감 → 주문 저장
@@ -121,6 +133,29 @@ public class OrderService {
 
         Order saved = orderRepository.save(order);
         log.info("[createOrder] 주문 완료 - orderId={}, orderNumber={}", saved.getId(), saved.getOrderNumber());
+
+        // Redis에 자동 취소용 TTL 키 저장
+        // → 15분 후 만료되면 Keyspace Notification이 발행되고,
+        //   PendingOrderExpirationListener가 autoCancelIfPending(saved.getId())를 호출
+        // → 값은 의미 없음, 키 자체의 존재와 TTL만 이용
+        //
+        // try-catch로 감싸는 이유:
+        // → Redis 장애가 주문 트랜잭션까지 롤백시키면 안 됨 (외부 의존 장애 격리)
+        // → Redis 등록이 실패해도 PendingOrderCleanupScheduler 배치(5분 주기)가
+        //   stale PENDING 주문을 결국 정리하므로 안전망이 보장됨
+        try {
+            redisTemplate.opsForValue().set(
+                    PENDING_ORDER_KEY_PREFIX + saved.getId(),
+                    "1",
+                    PENDING_ORDER_TTL
+            );
+            log.info("[createOrder] 자동 취소 TTL 등록 - orderId={}, ttl={}",
+                    saved.getId(), PENDING_ORDER_TTL);
+        } catch (Exception e) {
+            log.error("[createOrder] Redis TTL 등록 실패 — 배치로 정리될 예정 - orderId={}",
+                    saved.getId(), e);
+        }
+
         return OrderCreateResponse.from(saved);
     }
 

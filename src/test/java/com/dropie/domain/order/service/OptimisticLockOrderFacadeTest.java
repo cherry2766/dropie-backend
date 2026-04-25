@@ -2,6 +2,7 @@ package com.dropie.domain.order.service;
 
 import com.dropie.domain.order.dto.request.CreateOrderRequest;
 import com.dropie.domain.order.dto.response.OrderCreateResponse;
+import com.dropie.domain.order.listener.PendingOrderExpirationListener;
 import com.dropie.domain.product.entity.Product;
 import com.dropie.domain.user.entity.User;
 import com.dropie.global.exception.BusinessException;
@@ -50,6 +51,11 @@ class OptimisticLockOrderFacadeTest {
 
     @MockitoBean
     private JavaMailSender javaMailSender;
+
+    // PendingOrderExpirationListener는 부모(KeyExpirationEventMessageListener)의 afterPropertiesSet()이
+    // RedisConnectionFactory.getConnection()을 호출함 → mock 처리한 RedissonClient 때문에 NPE 발생
+    @MockitoBean
+    private PendingOrderExpirationListener pendingOrderExpirationListener;
 
     private CustomUserDetails userDetails;
     private CreateOrderRequest request;

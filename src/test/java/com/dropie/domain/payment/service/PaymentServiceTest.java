@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -43,6 +44,11 @@ class PaymentServiceTest {
     private PaymentRepository paymentRepository;
     @Mock
     private TossPaymentClient tossPaymentClient;
+
+    // Redis 키 선삭제(redisTemplate.delete)에 필요. delete()는 별도 stub 없이도
+    // 기본 mock 반환값(0L)으로 안전하게 동작하므로 필드 선언만 추가하면 됨
+    @Mock
+    private StringRedisTemplate redisTemplate;
 
     private User user;
     private Order order;
@@ -78,7 +84,7 @@ class PaymentServiceTest {
                 .approvedAt("2026-04-23T10:15:30+09:00")
                 .build();
 
-        given(orderRepository.findById(1L)).willReturn(Optional.of(order));
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
         given(tossPaymentClient.confirm(any(), any(), any(Integer.class))).willReturn(tossResponse);
         given(paymentRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
 
@@ -98,7 +104,7 @@ class PaymentServiceTest {
         // given: 주문 금액은 5500인데 요청 금액은 9999
         PaymentConfirmRequest request = new PaymentConfirmRequest("payKey123", 9999);
 
-        given(orderRepository.findById(1L)).willReturn(Optional.of(order));
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when & then
         assertThatThrownBy(() -> paymentService.confirmPayment("test@email.com", 1L, request))
@@ -116,7 +122,7 @@ class PaymentServiceTest {
         // given
         PaymentConfirmRequest request = new PaymentConfirmRequest("payKey123", 5500);
 
-        given(orderRepository.findById(1L)).willReturn(Optional.of(order));
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
         given(tossPaymentClient.confirm(any(), any(), any(Integer.class)))
                 .willThrow(new BusinessException(ErrorCode.PAYMENT_FAILED));
 
@@ -146,7 +152,7 @@ class PaymentServiceTest {
 
         PaymentConfirmRequest request = new PaymentConfirmRequest("payKey123", 5500);
 
-        given(orderRepository.findById(1L)).willReturn(Optional.of(order));
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
         given(paymentRepository.findByOrder(order)).willReturn(Optional.of(existingPayment));
 
         // when
@@ -162,7 +168,7 @@ class PaymentServiceTest {
     @DisplayName("결제 확인 실패 — 본인 주문이 아니면 ORDER_ACCESS_DENIED 예외")
     void 결제_확인_타인주문_예외() {
         // given: order는 test@email.com 소유인데 other@email.com이 결제 시도
-        given(orderRepository.findById(1L)).willReturn(Optional.of(order));
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when & then
         assertThatThrownBy(() ->
@@ -176,7 +182,7 @@ class PaymentServiceTest {
     @DisplayName("결제 확인 실패 — 존재하지 않는 주문이면 OrderNotFoundException 예외")
     void 결제_확인_없는주문_예외() {
         // given
-        given(orderRepository.findById(999L)).willReturn(Optional.empty());
+        given(orderRepository.findByIdForUpdate(999L)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() ->
@@ -190,7 +196,7 @@ class PaymentServiceTest {
         // given: 이미 취소된 주문
         order.cancel();  // PENDING → CANCELED
 
-        given(orderRepository.findById(1L)).willReturn(Optional.of(order));
+        given(orderRepository.findByIdForUpdate(1L)).willReturn(Optional.of(order));
 
         // when & then
         assertThatThrownBy(() ->
