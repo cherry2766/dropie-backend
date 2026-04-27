@@ -5,6 +5,7 @@ import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.LineupRoundResponse;
 import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.policy.EventStatusCalculator;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.dto.response.ProductResponse;
 import com.dropie.domain.product.repository.ProductRepository;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,9 +45,18 @@ public class EventService {
 
         // status 값 유무에 따라 다른 쿼리 실행
         // null이면 전체 조회(기존 동작 유지), 아니면 상태 필터 조회
-        Page<EventListResponse> result = (status != null)
-                ? eventRepository.findByStatus(status, pageable).map(EventListResponse::from)
-                : eventRepository.findAll(pageable).map(EventListResponse::from);
+        LocalDateTime now = LocalDateTime.now();
+        Page<Event> events = (status != null)
+                ? eventRepository.findByStatus(status, pageable)
+                : eventRepository.findAll(pageable);
+
+        // 한 번의 쿼리로 모든 이벤트의 "재고 있음 여부"를 조회 (N+1 방지)
+        // 간단한 구현: 페이지 사이즈가 작으니 이벤트별로 existsByEventAndStockGreaterThan 호출해도 됨
+        // 더 정교하게 하려면 GROUP BY로 한 번에 가져오는 쿼리 추가
+        Page<EventListResponse> result = events.map(event -> {
+            boolean allSoldOut = !productRepository.existsByEventAndStockGreaterThan(event, 0);
+            return EventListResponse.from(event, now, allSoldOut);
+        });
 
         return PageResponse.from(result);
     }
@@ -69,7 +80,9 @@ public class EventService {
 
         PageResponse<ProductResponse> products = PageResponse.from(productPage);
 
-        return EventDetailResponse.of(event, products);
+        LocalDateTime now = LocalDateTime.now();
+        boolean allSoldOut = !productRepository.existsByEventAndStockGreaterThan(event, 0);
+        return EventDetailResponse.of(event, products, now, allSoldOut);
     }
 
     // GET /events/lineup — 라인업 조회
@@ -87,11 +100,14 @@ public class EventService {
 
         // 1차부터 순서대로 차수 번호 부여
         List<LineupRoundResponse> result = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
         int round = 1;
         for (List<Event> group : grouped.values()) {
+            Event first = group.get(0);
+            boolean allSoldOut = !productRepository.existsByEventAndStockGreaterThan(first, 0);
             result.add(LineupRoundResponse.builder()
                     .round(round++)
-                    .status(group.get(0).getStatus().name())
+                    .status(EventStatusCalculator.resolve(first, now, allSoldOut).name())
                     .brands(group.stream().map(Event::getBrandName).toList())
                     .build());
         }

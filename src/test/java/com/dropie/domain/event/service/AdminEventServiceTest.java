@@ -10,6 +10,7 @@ import com.dropie.domain.event.dto.response.EventCreateResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.product.entity.Product;
+import com.dropie.domain.product.repository.ProductRepository;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.s3.S3Service;
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
@@ -44,6 +46,9 @@ class AdminEventServiceTest {
     private EventRepository eventRepository;
 
     @Mock
+    private ProductRepository productRepository;
+
+    @Mock
     private S3Service s3Service;
 
     private Event upcomingEvent;
@@ -52,13 +57,15 @@ class AdminEventServiceTest {
 
     @BeforeEach
     void setUp() {
+        // EventStatusCalculator가 derived status를 계산하므로 시간 기반 판단에 걸리지 않도록
+        // DB status와 시간 조건을 일치시켜 둠 (UPCOMING은 미래, OPEN은 현재 시각이 startAt~endAt 사이)
         upcomingEvent = Event.builder()
                 .brandName("노티드")
                 .description("설명")
                 .thumbnailImageUrl("https://thumb.jpg")
                 .imageUrl("https://image.jpg")
-                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
-                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                .startAt(LocalDateTime.now().plusHours(1))
+                .endAt(LocalDateTime.now().plusHours(2))
                 .status(EventStatus.UPCOMING)
                 .build();
 
@@ -67,8 +74,8 @@ class AdminEventServiceTest {
                 .description("설명")
                 .thumbnailImageUrl("https://thumb.jpg")
                 .imageUrl("https://image.jpg")
-                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
-                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                .startAt(LocalDateTime.now().minusHours(1))
+                .endAt(LocalDateTime.now().plusHours(1))
                 .status(EventStatus.OPEN)
                 .build();
 
@@ -77,8 +84,8 @@ class AdminEventServiceTest {
                 .description("설명")
                 .thumbnailImageUrl("https://thumb.jpg")
                 .imageUrl("https://image.jpg")
-                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
-                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                .startAt(LocalDateTime.now().minusHours(2))
+                .endAt(LocalDateTime.now().minusHours(1))
                 .status(EventStatus.FINISHED)
                 .build();
     }
@@ -205,6 +212,9 @@ class AdminEventServiceTest {
     void 이벤트_전체목록_조회_성공() {
         // given
         given(eventRepository.findAll()).willReturn(List.of(upcomingEvent, openEvent));
+        // 재고가 남아있는 상태로 가정 → allSoldOut=false → derived status가 SOLD_OUT으로 덮이지 않음
+        given(productRepository.existsByEventAndStockGreaterThan(any(), eq(0)))
+                .willReturn(true);
 
         // when
         List<AdminEventResponse> result = adminEventService.getEvents();

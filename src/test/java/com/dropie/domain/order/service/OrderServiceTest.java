@@ -104,8 +104,8 @@ class OrderServiceTest {
                 .endAt(LocalDateTime.now().plusHours(1))
                 .build();
 
-        // 기본값: 재고가 남은 상품이 있음 → 이벤트 자동 CLOSED 미발생
-        // 품절 자동 CLOSED 테스트에서만 false로 재정의
+        // 기본값: 재고가 남은 상품이 있음 → 이벤트 자동 SOLD_OUT 미발생
+        // 품절 자동 SOLD_OUT 테스트에서만 false로 재정의
         given(productRepository.existsByEventAndStockGreaterThan(any(Event.class), eq(0)))
                 .willReturn(true);
     }
@@ -355,8 +355,8 @@ class OrderServiceTest {
         }
 
         @Test
-        @DisplayName("주문 후 이벤트 모든 상품 품절 — 이벤트 자동 CLOSED")
-        void 주문_후_모든상품_품절_이벤트_자동CLOSED() {
+        @DisplayName("주문 후 이벤트 모든 상품 품절 — 이벤트 자동 SOLD_OUT")
+        void 주문_후_모든상품_품절_이벤트_자동SOLD_OUT() {
             // given
             // 재고가 딱 1개인 상품 — 1개 주문하면 재고 0이 됨
             Product product = Product.builder()
@@ -380,9 +380,9 @@ class OrderServiceTest {
             // when
             orderService.createOrder(request, userDetails);
 
-            // then — openEvent 상태가 CLOSED로 바뀌었는지 확인
+            // then — openEvent 상태가 SOLD_OUT으로 바뀌었는지 확인
             // event는 mock이 아닌 실제 객체라 상태를 직접 검증 가능
-            assertThat(openEvent.getStatus()).isEqualTo(EventStatus.CLOSED);
+            assertThat(openEvent.getStatus()).isEqualTo(EventStatus.SOLD_OUT);
         }
 
         @Test
