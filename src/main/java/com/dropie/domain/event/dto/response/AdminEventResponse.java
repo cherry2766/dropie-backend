@@ -2,6 +2,7 @@ package com.dropie.domain.event.dto.response;
 
 import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.policy.EventStatusCalculator;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -22,14 +23,14 @@ public class AdminEventResponse {
     private LocalDateTime startAt;
     private LocalDateTime endAt;
 
-    public static AdminEventResponse from(Event event) {
+    public static AdminEventResponse from(Event event, LocalDateTime now, boolean allSoldOut) {
         return AdminEventResponse.builder()
                 .id(event.getId())
                 .brandName(event.getBrandName())
                 .description(event.getDescription())
                 .thumbnailImageUrl(event.getThumbnailImageUrl())
                 .imageUrl(event.getImageUrl())
-                .status(event.getStatus())
+                .status(EventStatusCalculator.resolve(event, now, allSoldOut))
                 .startAt(event.getStartAt())
                 .endAt(event.getEndAt())
                 .build();

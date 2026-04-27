@@ -1,5 +1,7 @@
 package com.dropie.domain.order.service;
 
+import com.dropie.domain.event.entity.Event;
+import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.order.entity.Order;
 import com.dropie.domain.order.entity.OrderItem;
 import com.dropie.domain.order.entity.OrderStatus;
@@ -12,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,11 +33,22 @@ class PendingOrderAutoCancelServiceTest {
     @InjectMocks
     private PendingOrderAutoCancelService autoCancelService;
 
+    // 운영에서 Product.event는 NOT NULL FK이므로 테스트에서도 항상 세팅해야 함
+    // OPEN 상태 + 미래 endAt → 자동취소 후 SOLD_OUT→OPEN 복귀 분기에 걸리지 않아 재고/취소 검증에만 집중 가능
+    private Event openEvent() {
+        return Event.builder()
+                .brandName("브랜드")
+                .status(EventStatus.OPEN)
+                .startAt(LocalDateTime.now().minusHours(1))
+                .endAt(LocalDateTime.now().plusHours(1))
+                .build();
+    }
+
     @Test
     @DisplayName("PENDING 주문 자동 취소 성공 — 상태 CANCELED 전이 + 재고 복구")
     void 자동_취소_성공() {
         // given — stock=0인 상품에 대해 quantity=2가 주문된 상태
-        Product product = Product.builder().id(1L).stock(0).build();
+        Product product = Product.builder().id(1L).stock(0).event(openEvent()).build();
         OrderItem item = OrderItem.builder().product(product).quantity(2).build();
         Order order = Order.builder()
                 .id(100L)
@@ -56,8 +70,8 @@ class PendingOrderAutoCancelServiceTest {
     @DisplayName("주문 아이템이 여러 개일 때 모든 상품의 재고가 각각 복구된다")
     void 여러_상품_재고_복구() {
         // given
-        Product p1 = Product.builder().id(1L).stock(5).build();
-        Product p2 = Product.builder().id(2L).stock(0).build();
+        Product p1 = Product.builder().id(1L).stock(5).event(openEvent()).build();
+        Product p2 = Product.builder().id(2L).stock(0).event(openEvent()).build();
         OrderItem i1 = OrderItem.builder().product(p1).quantity(3).build();
         OrderItem i2 = OrderItem.builder().product(p2).quantity(7).build();
 
@@ -82,7 +96,7 @@ class PendingOrderAutoCancelServiceTest {
     @DisplayName("이미 PAID 상태면 스킵 — 멱등성 (TTL 만료 직전 결제 완료 케이스)")
     void 이미_PAID면_스킵() {
         // given
-        Product product = Product.builder().id(1L).stock(0).build();
+        Product product = Product.builder().id(1L).stock(0).event(openEvent()).build();
         OrderItem item = OrderItem.builder().product(product).quantity(2).build();
         Order order = Order.builder()
                 .id(100L)
@@ -103,7 +117,7 @@ class PendingOrderAutoCancelServiceTest {
     @DisplayName("이미 CANCELED 상태면 스킵 — 중복 자동 취소 방지 (배치+리스너 동시 실행 케이스)")
     void 이미_CANCELED면_스킵() {
         // given — Redis 리스너가 한 번 처리한 후 배치가 또 들어오는 케이스
-        Product product = Product.builder().id(1L).stock(2).build();
+        Product product = Product.builder().id(1L).stock(2).event(openEvent()).build();
         OrderItem item = OrderItem.builder().product(product).quantity(2).build();
         Order order = Order.builder()
                 .id(100L)

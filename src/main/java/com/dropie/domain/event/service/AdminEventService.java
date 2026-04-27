@@ -7,9 +7,9 @@ import com.dropie.domain.event.dto.request.UpdateEventRequest;
 import com.dropie.domain.event.dto.request.UpdateEventStatusRequest;
 import com.dropie.domain.event.dto.response.EventCreateResponse;
 import com.dropie.domain.event.dto.response.AdminEventResponse;
-import com.dropie.domain.event.dto.response.EventListResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
+import com.dropie.domain.product.repository.ProductRepository;
 import com.dropie.global.exception.custom.EventNotFoundException;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.global.s3.S3Service;
@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -26,6 +27,7 @@ import java.util.List;
 public class AdminEventService {
 
     private final EventRepository eventRepository;
+    private final ProductRepository productRepository;
     private final S3Service s3Service;
 
     // 이벤트 전체 목록 조회 — 관리자 페이지에서 등록한 이벤트 목록을 보여줄 때 사용
@@ -33,8 +35,12 @@ public class AdminEventService {
     @Transactional(readOnly = true)
     public List<AdminEventResponse> getEvents() {
         log.debug("[getEvents] 이벤트 전체 목록 조회");
+        LocalDateTime now = LocalDateTime.now();
         return eventRepository.findAll().stream()
-                .map(AdminEventResponse::from)
+                .map(event -> {
+                    boolean allSoldOut = !productRepository.existsByEventAndStockGreaterThan(event, 0);
+                    return AdminEventResponse.from(event, now, allSoldOut);
+                })
                 .toList();
     }
 

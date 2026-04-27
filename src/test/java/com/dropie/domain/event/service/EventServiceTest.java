@@ -49,14 +49,15 @@ class EventServiceTest {
 
     @BeforeEach
     void setUp() {
-        // 각 테스트 실행 전마다 픽스처 초기화
+        // EventStatusCalculator가 derived status를 계산하므로 시간 기반 분기에 걸리지 않도록
+        // 현재 시각이 startAt~endAt 사이에 들어오게 세팅 (DB OPEN과 derived OPEN이 일치)
         event = Event.builder()
                 .brandName("노티드")
                 .description("브랜드 설명")
                 .thumbnailImageUrl("https://thumb.jpg")
                 .imageUrl("https://image.jpg")
-                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
-                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                .startAt(LocalDateTime.now().minusHours(1))
+                .endAt(LocalDateTime.now().plusHours(1))
                 .status(EventStatus.OPEN)
                 .build();
 
@@ -105,6 +106,8 @@ class EventServiceTest {
         );
         // status=OPEN으로 필터링하면 findByStatus가 호출되어야 함
         given(eventRepository.findByStatus(eq(EventStatus.OPEN), any(PageRequest.class))).willReturn(eventPage);
+        // 재고가 남아있는 상태로 가정 → allSoldOut=false → derived가 SOLD_OUT으로 덮이지 않음
+        given(productRepository.existsByEventAndStockGreaterThan(any(), eq(0))).willReturn(true);
 
         // when
         PageResponse<EventListResponse> result = eventService.getEvents(1, 6, EventStatus.OPEN);
@@ -160,10 +163,11 @@ class EventServiceTest {
     @DisplayName("라인업 조회 성공 — startAt/endAt이 같은 이벤트가 같은 차수로 묶임")
     void 라인업_조회_성공_같은시간대_묶음() {
         // given
-        LocalDateTime start1 = LocalDateTime.of(2026, 1, 10, 11, 0);
-        LocalDateTime end1   = LocalDateTime.of(2026, 3, 31, 23, 59);
-        LocalDateTime start2 = LocalDateTime.of(2026, 4, 1, 11, 0);
-        LocalDateTime end2   = LocalDateTime.of(2026, 12, 31, 23, 59);
+        // 1차는 과거 시간대(FINISHED), 2차는 현재 판매 중(OPEN)으로 derived status가 일치하도록 설정
+        LocalDateTime start1 = LocalDateTime.now().minusDays(60);
+        LocalDateTime end1   = LocalDateTime.now().minusDays(30);
+        LocalDateTime start2 = LocalDateTime.now().minusHours(1);
+        LocalDateTime end2   = LocalDateTime.now().plusHours(1);
 
         // 1차: FINISHED 2개, 2차: OPEN 2개 — 같은 startAt/endAt끼리 묶여야 함
         Event e1 = Event.builder().brandName("솔트버터").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
@@ -172,6 +176,8 @@ class EventServiceTest {
         Event e4 = Event.builder().brandName("도넛클럽").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
 
         given(eventRepository.findAllByOrderByStartAtAsc()).willReturn(List.of(e1, e2, e3, e4));
+        // 재고가 남아있는 상태로 가정 → 2차의 OPEN이 SOLD_OUT으로 덮이지 않음
+        given(productRepository.existsByEventAndStockGreaterThan(any(), eq(0))).willReturn(true);
 
         // when
         List<LineupRoundResponse> result = eventService.getLineup();

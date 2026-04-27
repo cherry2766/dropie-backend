@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -31,8 +32,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest
 @TestPropertySource(properties = "app.lock.type=redis")
@@ -61,6 +66,14 @@ public class RedisLockConcurrencyTest {
 
     @BeforeEach
     void setUp() {
+        // OrderService.generateOrderNumber()가 redisTemplate.opsForValue().increment(key)를 호출하므로
+        // 매 호출마다 unique한 값을 반환하도록 mock 세팅 (orderNumber가 unique 제약)
+        // 또한 PENDING TTL 등록을 위한 set(...)도 NPE 안 나도록 stub
+        ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+        AtomicLong seq = new AtomicLong(0);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.increment(anyString())).willAnswer(inv -> seq.incrementAndGet());
+
         Event event = eventRepository.save(Event.builder()
                 .brandName("동시성 테스트 브랜드")
                 .status(EventStatus.OPEN)
@@ -128,7 +141,7 @@ public class RedisLockConcurrencyTest {
                 } catch (BusinessException e) {
                     // LOCK_ACQUISITION_FAILED: waitTime 초과로 락 자체를 못 잡은 실패 → Redis 락의 한계
                     // OUT_OF_STOCK, EVENT_ENDED 등: 재고 소진 또는 이벤트 마감으로 인한 정상 실패
-                    //   (50번째 주문이 완료되면 이벤트가 자동 CLOSED → 이후 스레드는 EVENT_ENDED 예외)
+                    //   (50번째 주문이 완료되면 이벤트가 자동 SOLD_OUT → 이후 스레드는 EVENT_ENDED 예외)
                     if (e.getErrorCode() == ErrorCode.LOCK_ACQUISITION_FAILED) {
                         lockFailCount.incrementAndGet();
                     } else {

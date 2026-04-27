@@ -1,5 +1,6 @@
 package com.dropie.domain.order.service;
 
+import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.order.entity.Order;
 import com.dropie.domain.order.entity.OrderItem;
 import com.dropie.domain.order.entity.OrderStatus;
@@ -9,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 // PENDING 주문의 자동 취소 전용 서비스
 // → 유저 요청 경로(cancelOrder)와 분리한 이유:
@@ -30,7 +33,7 @@ public class PendingOrderAutoCancelService {
      * <p>
      * 동시성 방어:
      * - 트랜잭션 안에서 findByIdForUpdate()로 비관적 락 획득 → confirmPayment와 같은 row를 다툰 경우
-     *   한쪽이 끝날 때까지 대기 후 최신 상태 조회
+     * 한쪽이 끝날 때까지 대기 후 최신 상태 조회
      * - 락 획득 후 상태가 PENDING이 아니면(예: 이미 PAID) 아무것도 하지 않음 → 멱등
      *
      * @param orderId 자동 취소 대상 주문 id
@@ -63,6 +66,18 @@ public class PendingOrderAutoCancelService {
             log.debug("[autoCancel] 재고 복구 - productId={}, +{}",
                     product.getId(), item.getQuantity());
         }
+
+        LocalDateTime now = LocalDateTime.now();
+        order.getOrderItems().stream()
+                .map(item -> item.getProduct().getEvent())
+                .distinct()
+                .forEach(event -> {
+                    if (event.getStatus() == EventStatus.SOLD_OUT
+                            && now.isBefore(event.getEndAt())) {
+                        event.changeStatus(EventStatus.OPEN);
+                        log.info("[autoCancel] 재고 복구로 SOLD_OUT → OPEN eventId={}", event.getId());
+                    }
+                });
 
         log.info("[autoCancel] 자동 취소 완료 - orderId={}, orderNumber={}",
                 orderId, order.getOrderNumber());

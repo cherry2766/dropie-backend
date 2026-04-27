@@ -5,6 +5,7 @@ import com.dropie.domain.order.repository.OrderRepository;
 import com.dropie.domain.order.service.PendingOrderAutoCancelService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,14 @@ import java.util.List;
 // Redis 이벤트 유실 대비 안전망 배치
 // → Redis 다운, Keyspace Notification 미전달, 앱 재시작 중 만료 등 시나리오를 커버
 // → 주기적으로 "오래된 PENDING 주문"을 찾아 자동 취소 서비스로 위임
+// 테스트 환경에서는 dropie.scheduler.pending-order-cleanup.enabled=false로 빈 등록 자체를 차단
+// → 테스트 도중 PENDING 주문이 자동 취소되어 검증이 깨지는 flaky test 방지
+// matchIfMissing=true: 운영 yml에 별도 설정 없어도 기본 활성화
+@ConditionalOnProperty(
+        name = "dropie.scheduler.pending-order-cleanup.enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 @Slf4j
 @Component
 @RequiredArgsConstructor

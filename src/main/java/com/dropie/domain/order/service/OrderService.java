@@ -124,12 +124,12 @@ public class OrderService {
         // 루프 끝나고 최종 totalPrice 반영
         order.updateTotalPrice(totalPrice);
 
-        // 재고 차감 후 해당 이벤트의 모든 상품이 품절이면 자동 CLOSED 처리
+        // 재고 차감 후 해당 이벤트의 모든 상품이 품절이면 자동 SOLD_OUT 처리
         // dirty checking: @Transactional 안에서 상태만 바꾸면 save() 없이 트랜잭션 종료 시 자동 반영
         for (Event event : affectedEvents) {
             if (!productRepository.existsByEventAndStockGreaterThan(event, 0)) {
-                event.changeStatus(EventStatus.CLOSED);
-                log.info("[createOrder] 이벤트 전 상품 품절 — 자동 CLOSED 처리 eventId={}", event.getId());
+                event.changeStatus(EventStatus.SOLD_OUT);
+                log.info("[createOrder] 이벤트 전 상품 품절 — 자동 SOLD_OUT 처리 eventId={}", event.getId());
             }
         }
 
@@ -220,6 +220,20 @@ public class OrderService {
         order.getOrderItems().forEach(item ->
                 item.getProduct().increaseStock(item.getQuantity()));
 
+        // 재고 복구로 SOLD_OUT 이벤트가 다시 판매 가능해지면 OPEN으로 복귀
+        // 단, endAt이 이미 지났으면 복귀시키지 않음 (스케줄러가 곧 CLOSED로 전환)
+        LocalDateTime now = LocalDateTime.now();
+        order.getOrderItems().stream()
+                .map(item -> item.getProduct().getEvent())
+                .distinct()
+                .forEach(event -> {
+                    if (event.getStatus() == EventStatus.SOLD_OUT
+                            && now.isBefore(event.getEndAt())) {
+                        event.changeStatus(EventStatus.OPEN);
+                        log.info("[cancelOrder] 재고 복구로 SOLD_OUT → OPEN eventId={}", event.getId());
+                    }
+                });
+
         log.info("[cancelOrder] 취소 완료 - orderId={}", orderId);
         return OrderCancelResponse.from(order);
     }
@@ -231,6 +245,13 @@ public class OrderService {
     //   시간 범위 내여도 관리자가 강제로 CLOSED 처리했을 수 있음
     private void validateEventTime(Event event) {
         LocalDateTime now = LocalDateTime.now();
+
+        // 전 상품 품절로 자동 SOLD_OUT 처리된 이벤트는 "다 팔렸다"로 명시적으로 막음
+        // 이 분기가 없어도 decreaseStock()에서 OutOfStockException으로 결국 막히지만,
+        // 사용자에게 보이는 메시지를 "이미 모두 판매되었습니다"로 자연스럽게 노출하기 위함
+        if (event.getStatus() == EventStatus.SOLD_OUT) {
+            throw new BusinessException(ErrorCode.EVENT_SOLD_OUT);
+        }
 
         // CLOSED/FINISHED 상태이거나 종료 시각을 지난 경우
         if(event.getStatus() == EventStatus.CLOSED

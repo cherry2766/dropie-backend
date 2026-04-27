@@ -34,6 +34,7 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 상품입니다."),                      // 404
     OUT_OF_STOCK(HttpStatus.CONFLICT, "재고가 부족합니다."),                                  // 409 - 재고 부족은 입력값 문제가 아닌 서버 상태 충돌이므로 400 대신 409 사용
     INVALID_QUANTITY(HttpStatus.BAD_REQUEST, "잘못된 수량 요청입니다."),                      // 400 - 수량 자체가 0 이하로 잘못된 입력값이므로 400 사용 (OUT_OF_STOCK과 구분)
+    EVENT_SOLD_OUT(HttpStatus.BAD_REQUEST, "이미 모두 판매되었습니다."),
 
     // 주문
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 주문입니다."),                       // 404
