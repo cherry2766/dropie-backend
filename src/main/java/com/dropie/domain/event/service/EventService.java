@@ -32,6 +32,7 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final ProductRepository productRepository;
+    private final PopularEventService popularEventService;
 
     // GET /events — 이벤트 목록 조회
     // status가 null이면 전체 조회, 값이 있으면 해당 상태만 필터링
@@ -82,6 +83,14 @@ public class EventService {
 
         LocalDateTime now = LocalDateTime.now();
         boolean allSoldOut = !productRepository.existsByEventAndStockGreaterThan(event, 0);
+
+        // 인기 점수 누적
+        try {
+            popularEventService.addScore(eventId, PopularEventService.VIEW_SCORE);
+        } catch (Exception e) {
+            log.warn("[getEventDetail] 인기 점수 누적 실패 - eventId={}", eventId, e);
+        }
+
         return EventDetailResponse.of(event, products, now, allSoldOut);
     }
 

@@ -3,6 +3,7 @@ package com.dropie.domain.payment.service;
 import com.dropie.domain.order.entity.Order;
 import com.dropie.domain.order.entity.OrderItem;
 import com.dropie.domain.order.entity.OrderStatus;
+import com.dropie.domain.order.event.OrderPaidEvent;
 import com.dropie.domain.order.repository.OrderRepository;
 import com.dropie.domain.payment.client.TossPaymentClient;
 import com.dropie.domain.payment.dto.request.PaymentConfirmRequest;
@@ -16,6 +17,7 @@ import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.exception.custom.OrderNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final TossPaymentClient tossPaymentClient;
     private final StringRedisTemplate redisTemplate;
+    private final ApplicationEventPublisher eventPublisher;
     private static final String PENDING_ORDER_KEY_PREFIX = "pending_order:";
 
     /**
@@ -139,6 +142,16 @@ public class PaymentService {
 
         log.info("[confirmPayment] 결제 완료 - orderId={}, paymentKey={}, amount={}",
                 orderId, payment.getPaymentKey(), payment.getAmount());
+
+        // 결제 완료 도메인 이벤트
+        // 한 주문에 여러 이벤트의 상품이 섞여있을 수 있음 → 각 이벤트별로 발행
+        order.getOrderItems().stream()
+                .map(item -> item.getProduct().getEvent().getId())
+                .distinct()
+                .forEach(eventId -> eventPublisher.publishEvent(
+                        new OrderPaidEvent(order.getId(), order.getUser().getId(), eventId)
+                ));
+
         return PaymentConfirmResponse.of(order, payment);
     }
 
