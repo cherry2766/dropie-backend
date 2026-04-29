@@ -1,6 +1,7 @@
 package com.dropie.domain.order.service;
 
 import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.event.StockChangedEvent;
 import com.dropie.domain.order.entity.Order;
 import com.dropie.domain.order.entity.OrderItem;
 import com.dropie.domain.order.entity.OrderStatus;
@@ -8,6 +9,7 @@ import com.dropie.domain.order.repository.OrderRepository;
 import com.dropie.domain.product.entity.Product;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ import java.time.LocalDateTime;
 public class PendingOrderAutoCancelService {
 
     private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * orderId가 여전히 PENDING 상태라면 자동으로 취소하고 재고를 복구한다.
@@ -67,6 +70,7 @@ public class PendingOrderAutoCancelService {
                     product.getId(), item.getQuantity());
         }
 
+        // SOLD_OUT → OPEN 복귀
         LocalDateTime now = LocalDateTime.now();
         order.getOrderItems().stream()
                 .map(item -> item.getProduct().getEvent())
@@ -78,6 +82,18 @@ public class PendingOrderAutoCancelService {
                         log.info("[autoCancel] 재고 복구로 SOLD_OUT → OPEN eventId={}", event.getId());
                     }
                 });
+
+        // 재고 복구 브로드캐스트
+        order.getOrderItems().forEach(item -> {
+            Product product = item.getProduct();
+            eventPublisher.publishEvent(
+                    StockChangedEvent.of(
+                            product.getEvent().getId(),
+                            product.getId(),
+                            product.getStock()
+                    )
+            );
+        });
 
         log.info("[autoCancel] 자동 취소 완료 - orderId={}, orderNumber={}",
                 orderId, order.getOrderNumber());

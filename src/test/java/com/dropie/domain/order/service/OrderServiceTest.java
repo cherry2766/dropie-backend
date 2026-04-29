@@ -2,6 +2,7 @@ package com.dropie.domain.order.service;
 
 import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.event.StockChangedEvent;
 import com.dropie.domain.order.dto.request.CreateOrderRequest;
 import com.dropie.domain.order.dto.response.OrderCancelResponse;
 import com.dropie.domain.order.dto.response.OrderCreateResponse;
@@ -31,6 +32,9 @@ import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -41,10 +45,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.*;
 
@@ -66,6 +68,9 @@ class OrderServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     // OrderService.createOrder()가 redisTemplate.opsForValue().set(...)을 호출함
     // RETURNS_DEEP_STUBS: opsForValue() 같은 체이닝 호출도 자동으로 mock 반환 → NPE 방지
@@ -409,6 +414,34 @@ class OrderServiceTest {
 
             // then — 이벤트 상태는 OPEN 그대로
             assertThat(openEvent.getStatus()).isEqualTo(EventStatus.OPEN);
+        }
+
+        @Test
+        @DisplayName("주문 생성 성공 시 StockChangedEvent가 상품 개수만큼 발행")
+        void 주문_생성_시_StockChangedEvent_발행() {
+            // given — 두 상품 주문 → 이벤트 2번 발행되어야 함
+            Product productA = Product.builder().id(1L).price(1000).stock(10).event(openEvent).build();
+            Product productB = Product.builder().id(2L).price(2000).stock(5).event(openEvent).build();
+
+            given(productRepository.findByIdWithOptimisticLock(1L)).willReturn(Optional.of(productA));
+            given(productRepository.findByIdWithOptimisticLock(2L)).willReturn(Optional.of(productB));
+            given(orderRepository.save(any(Order.class))).willAnswer(inv -> inv.getArgument(0));
+
+            CreateOrderRequest request = buildRequest(List.of(
+                    buildItem(1L, 2), // 차감 후 stock = 8
+                    buildItem(2L, 1) // 차감 후 stock = 4
+            ));
+
+            // when
+            orderService.createOrder(request, userDetails);
+
+            // then
+            then(eventPublisher).should(times(2))
+                    .publishEvent(any(StockChangedEvent.class));
+            then(eventPublisher).should().publishEvent(argThat((Object e) ->
+                    e instanceof StockChangedEvent s && s.productId().equals(1L) && s.currentStock() == 8));
+            then(eventPublisher).should().publishEvent(argThat((Object e) ->
+                    e instanceof StockChangedEvent s && s.productId().equals(2L) && s.currentStock() == 4));
         }
     }
 

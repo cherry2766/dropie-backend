@@ -2,6 +2,7 @@ package com.dropie.domain.order.service;
 
 import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.event.StockChangedEvent;
 import com.dropie.domain.order.dto.request.CreateOrderRequest;
 import com.dropie.domain.order.dto.response.OrderCancelResponse;
 import com.dropie.domain.order.dto.response.OrderCreateResponse;
@@ -22,6 +23,7 @@ import com.dropie.global.exception.custom.ProductNotFoundException;
 import com.dropie.global.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -44,6 +46,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final StringRedisTemplate redisTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 주문번호 시퀀스 키 prefix — 일자별로 키가 분리됨 (예: order:seq:20260425)
     // → Redis INCR이 원자적으로 1씩 증가시키며, 같은 시퀀스가 두 번 발급되지 않음
@@ -158,6 +161,19 @@ public class OrderService {
                     saved.getId(), e);
         }
 
+        // publishEvent 자체는 즉시 반환되지만, AFTER_COMMIT 리스너는 커밋 후에 실행됨
+        // → 이 publishEvent가 트랜잭션 안에서 실행되어야 트랜잭션 컨텍스트가 리스너에 전달됨
+        for (OrderItem item : order.getOrderItems()) {
+            Product product = item.getProduct();
+            eventPublisher.publishEvent(
+                    StockChangedEvent.of(
+                            product.getEvent().getId(),
+                            product.getId(),
+                            product.getStock()  // 차감 이후의 재고
+                    )
+            );
+        }
+
         return OrderCreateResponse.from(saved);
     }
 
@@ -235,6 +251,18 @@ public class OrderService {
                 });
 
         log.info("[cancelOrder] 취소 완료 - orderId={}", orderId);
+
+        // 재고 복구된 사실을 브로드캐스트
+        order.getOrderItems().forEach(item -> {
+            Product product = item.getProduct();
+            eventPublisher.publishEvent(
+                    StockChangedEvent.of(
+                            product.getEvent().getId(),
+                            product.getId(),
+                            product.getStock() // 복구 이후의 재고
+                    )
+            );
+        });
         return OrderCancelResponse.from(order);
     }
 
