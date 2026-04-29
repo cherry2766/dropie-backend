@@ -23,9 +23,9 @@ public class PopularityScoreListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPaid(OrderPaidEvent event) {
         try {
-            popularEventService.addScore(event.getEventId(), PopularEventService.ORDER_SCORE);
+            popularEventService.addScore(event.eventId(), PopularEventService.ORDER_SCORE);
         } catch (Exception e) {
-            log.warn("[PopularityScoreListener] 점수 누적 실패 - eventId={}", event.getEventId(), e);
+            log.warn("[PopularityScoreListener] 점수 누적 실패 - eventId={}", event.eventId(), e);
         }
     }
 }
