@@ -53,6 +53,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()    // 회원가입, 로그인은 누구나 접근 가능
                         .requestMatchers(HttpMethod.GET, "/events/**").permitAll() // 이벤트, 상품 조회 접근 가능
+                        .requestMatchers("/ws-stomp/**").permitAll() // WebSocket 핸드셰이크 (재고 broadcast는 공개 정보)
                         .requestMatchers("/admin/**").hasRole("ADMIN") // 관리자만 접근 가능
                         .anyRequest().authenticated())         // 나머지는 로그인 필요
                 // 5. 미인증 요청 시 401 반환
