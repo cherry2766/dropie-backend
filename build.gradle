@@ -52,6 +52,9 @@ dependencies {
 	// Spring WebSocket + STOMP
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
+	// Claude API 호출용 WebClient
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'

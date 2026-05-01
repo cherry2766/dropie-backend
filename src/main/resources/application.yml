@@ -1,0 +1,80 @@
+spring:
+  application:
+    name: dropie
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}   # 환경변수로 관리 (절대 하드코딩 금지)
+    password: ${MAIL_PASSWORD}   # Gmail 앱 비밀번호 사용 (2단계 인증 후 발급)
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true  # 전송 중 암호화
+
+  datasource:
+    url: jdbc:mysql://localhost:3307/dropie?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+
+  jpa:
+    defer-datasource-initialization: true  # data.sql이 Hibernate 테이블 생성 이후에 실행되도록 순서 보장
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 1800000
+
+app:
+  lock:
+    type: redis   # redis ↔ optimistic 변경만으로 락 방식 전환
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.dropie: DEBUG
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
+
+cloud:
+  aws:
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
+    s3:
+      bucket: dropie-bucket-s3
+    region:
+      static: ap-northeast-2
+
+# 관리자 계정 초기값 설정
+admin:
+  email: ${ADMIN_EMAIL}
+  password: ${ADMIN_PASSWORD}
+  nickname: ${ADMIN_NICKNAME}
+
+toss:
+  payments:
+    # 실제 결제가 발생하지 않아 테스트에 안전
+    secret-key: ${TOSS_SECRET_KEY}
+    client-key: ${TOSS_CLIENT_KEY}  # 프론트에서 사용
+
+claude:
+  api:
+    key: ${CLAUDE_API_KEY}
+    base-url: https://api.anthropic.com
+    model: claude-haiku-4-5-20251001   # 빠르고 저렴한 모델 (추천 문구는 짧아 충분)
+    timeout-ms: 5000                   # 5초 초과 시 타임아웃 → 기본 문구 폴백
+    max-tokens: 1000

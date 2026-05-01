@@ -1,0 +1,100 @@
+spring:
+  application:
+    name: dropie
+
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    defer-datasource-initialization: true
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  sql:
+    init:
+      mode: always
+
+  # 테스트 환경에서는 Redis 자동 연결을 막기 위해 기본값만 설정
+  # RedissonClient는 @MockitoBean으로 대체하거나 실제 Redis가 필요한 테스트에서만 사용
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # 테스트 환경에서 JavaMailSender 빈 생성에 필요한 더미 값
+  # 실제 메일을 발송하지 않음 (@Async + mock으로 대체)
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: test@test.com
+    password: test-password
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
+
+jwt:
+  # 테스트 전용 시크릿 — 실제 운영 키와 무관, 보안 위험 없음
+  # HS256 서명에 필요한 최소 256비트(32자 이상)를 맞춰야 jjwt가 예외를 던지지 않음
+  secret: test-secret-key-for-testing-purposes-only-minimum-256-bits-long
+  expiration: 1800000
+
+cloud:
+  aws:
+    credentials:
+      # 테스트 전용 더미 값 — 실제 AWS에 접근하지 않음 (S3Config/S3Service 빈 생성에만 필요)
+      access-key: test-access-key
+      secret-key: test-secret-key
+    s3:
+      bucket: test-bucket
+    region:
+      static: ap-northeast-2
+
+app:
+  lock:
+    type: redis
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.dropie: INFO
+
+# 테스트 환경에서 DataInitializer 빈 생성에 필요한 더미 값
+# 실제 관리자 계정을 만들지 않음 (H2 인메모리 DB라 테스트 종료 시 사라짐)
+admin:
+  email: admin@test.com
+  password: test1234!!
+  nickname: 관리자
+
+toss:
+  payments:
+    # 테스트 전용 더미 값 — 실제 토스페이먼츠에 접근하지 않음 (TossPaymentClient 빈 생성에만 필요)
+    secret-key: test_sk_dummy_for_testing_only
+
+# 테스트 도중 백그라운드 스케줄러가 돌면 status/order가 의도치 않게 바뀌어 flaky test 발생
+# → 빈 등록 자체를 막아 100% 결정론적 테스트 보장
+dropie:
+  scheduler:
+    event-status:
+      enabled: false
+    pending-order-cleanup:
+      enabled: false
+  realtime:
+    websocket:
+      enabled: false
+
+claude:
+  api:
+    key: test-claude-key
+    base-url: http://localhost:9999
+    model: claude-haiku-4-5-20251001
+    timeout-ms: 5000
+    max-tokens: 1000
