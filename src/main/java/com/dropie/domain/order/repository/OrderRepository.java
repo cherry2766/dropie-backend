@@ -45,7 +45,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByIdForUpdate(@Param("orderId") Long orderId);
 
     // 배치용: 오래된 PENDING 주문의 id만 조회
-// → fetch join이나 전체 엔티티 로딩을 피해 메모리 부담 최소화
+    // → fetch join이나 전체 엔티티 로딩을 피해 메모리 부담 최소화
     @Query("SELECT o.id FROM Order o " +
             "WHERE o.status = :status AND o.createdAt < :threshold")
     List<Long> findStalePendingOrderIds(
@@ -60,4 +60,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 where oi.product.id = :productId
             """)
     long countByOrderedProductId(@Param("productId") Long productId);
+
+    // OrderItems → Product → ProductTags → Tag 한 번에 fetch (N+1 방지)
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            JOIN FETCH o.orderItems oi
+            JOIN FETCH oi.product p 
+            LEFT JOIN FETCH p.productTags pt
+            LEFT JOIN FETCH pt.tag
+            WHERE o.id = :orderId
+            """)
+    Optional<Order> findByIdWithItemsAndTags(@Param("orderId") Long orderId);
 }
