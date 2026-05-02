@@ -54,13 +54,18 @@ public class User extends BaseEntity {
     // null 허용 - 가입 직후에는 이미지 없을 수 있음
     private String profileImageUrl;
 
+    // @Builder.Default가 없으면 Lombok @Builder가 = new ArrayList<>() 초기값을 무시해
+    // builder()로 만든 객체는 null이 됨 → 컬렉션 접근 시 NPE 위험
     @OneToMany(mappedBy = "user")
+    @Builder.Default
     private List<Order> orders = new ArrayList<>();
 
     @OneToMany(mappedBy = "user")
+    @Builder.Default
     private List<Address> addresses = new ArrayList<>();
 
     @OneToMany(mappedBy = "user")
+    @Builder.Default
     private List<UserPreference> preferences = new ArrayList<>();
 
     // 이메일 인증 완료 처리 메서드

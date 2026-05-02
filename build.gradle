@@ -63,6 +63,9 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 	// 테스트에서 STOMP 클라이언트가 필요할 때
 	testImplementation 'org.springframework.boot:spring-boot-starter-websocket'
+	// Claude API 단위 테스트용 — HTTP 응답 모킹
+	// Spring Boot BOM이 mockwebserver 버전을 관리해주지 않으므로 직접 명시
+	testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
 
 tasks.named('test') {

@@ -9,6 +9,10 @@ import com.dropie.domain.product.dto.response.AdminProductResponse;
 import com.dropie.domain.product.dto.response.ProductCreateResponse;
 import com.dropie.domain.product.dto.response.ProductStockResponse;
 import com.dropie.domain.product.dto.response.ProductUpdateResponse;
+import com.dropie.domain.product.entity.ProductTag;
+import com.dropie.domain.product.repository.ProductTagRepository;
+import com.dropie.domain.tag.entity.Tag;
+import com.dropie.domain.tag.repository.TagRepository;
 import com.dropie.global.exception.custom.EventNotFoundException;
 import com.dropie.global.exception.custom.ProductNotFoundException;
 import com.dropie.domain.event.repository.EventRepository;
@@ -20,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -28,6 +33,8 @@ public class AdminProductService {
 
     private final ProductRepository productRepository;
     private final EventRepository eventRepository; // 상품 등록 시 이벤트 존재 여부 확인 필요
+    private final TagRepository tagRepository;
+    private final ProductTagRepository productTagRepository;
     private final S3Service s3Service;
 
     // 상품 전체 목록 조회 — 관리자 페이지에서 모든 이벤트의 상품을 한눈에 보여줄 때 사용
@@ -41,7 +48,7 @@ public class AdminProductService {
                 .toList();
     }
 
-    // 상품 등록
+    // 상품 등록 — 태그 이름이 있으면 find-or-create로 연결
     @Transactional
     public ProductCreateResponse createProduct(CreateProductRequest request) {
         log.debug("[createProduct] 등록 요청 - eventId: {}, name: {}", request.getEventId(), request.getName());
@@ -61,10 +68,15 @@ public class AdminProductService {
                 .price(request.getPrice())
                 .stock(request.getStock())
                 .build();
+        productRepository.save(product);
 
-        ProductCreateResponse response = ProductCreateResponse.from(productRepository.save(product));
-        log.info("[createProduct] 등록 완료 - productId: {}", response.getId());
-        return response;
+        // 태그 연결 (있을때만)
+        if (request.getTagNames() != null && !request.getTagNames().isEmpty()) {
+            attachTags(product, request.getTagNames());
+        }
+
+        log.info("[createProduct] 등록 완료 - productId: {}", product.getId());
+        return ProductCreateResponse.from(product);
     }
 
     // 상품 수정
@@ -85,6 +97,19 @@ public class AdminProductService {
                 request.getDescription(),
                 request.getPrice()
         );
+
+        // 태그 처리 (PATCH 규약)
+        //   null     → 변경 없음 (아무것도 안 함)
+        //   []       → 모두 제거
+        //   값 있음  → 기존 다 지우고 새 목록으로 replace
+        if (request.getTagNames() != null) {
+            productTagRepository.deleteAllByProduct(product);
+            productTagRepository.flush();
+
+            if (!request.getTagNames().isEmpty()) {
+                attachTags(product, request.getTagNames());
+            }
+        }
 
         log.info("[updateProduct] 수정 완료 - productId: {}", productId);
         return ProductUpdateResponse.from(product);
@@ -126,4 +151,36 @@ public class AdminProductService {
         log.info("[deleteProduct] 삭제 완료 - productId: {}", productId);
     }
 
+    // 태그 이름 → Tag 엔티티 변환 (find-or-create) → ProductTag 연결
+    //
+    // 동작:
+    //   1) trim + 빈 문자열 거름 + 중복 입력 제거
+    //   2) 같은 이름이 DB에 있으면 그 Tag 사용, 없으면 새로 생성
+    //   3) 새로 생성하는 태그는 onboardingExposed=false (회원가입엔 안 노출)
+    private void attachTags(Product product, List<String> rawTagNames) {
+        List<String> normalized = rawTagNames.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .distinct()
+                .toList();
+
+        List<Tag> resolved = normalized.stream()
+                .map(name -> tagRepository.findByName(name)
+                        .orElseGet(() -> tagRepository.save(
+                                Tag.builder()
+                                        .name(name)
+                                        .onboardingExposed(false)
+                                        .build()
+                        )))
+                .toList();
+
+        List<ProductTag> productTags = resolved.stream()
+                .map(tag -> ProductTag.builder()
+                        .product(product)
+                        .tag(tag)
+                        .build())
+                .toList();
+        productTagRepository.saveAll(productTags);
+    }
 }

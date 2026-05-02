@@ -1,6 +1,7 @@
 package com.dropie.domain.preference.service;
 
 import com.dropie.domain.preference.entity.UserPreference;
+import com.dropie.domain.recommendation.service.TasteTagService;
 import com.dropie.domain.tag.entity.Tag;
 import com.dropie.domain.user.entity.User;
 import com.dropie.domain.preference.dto.request.PreferenceRequest;
@@ -25,10 +26,7 @@ public class PreferenceService {
     private final UserRepository userRepository;
     private final TagRepository tagRepository;
     private final UserPreferenceRepository userPreferenceRepository;
-
-    // 온보딩 default score 상수
-    // 온보딩에서는 모든 선택 태그를 동일 가중치로 저장
-    private static final int DEFAULT_SCORE = 5;
+    private final TasteTagService tasteTagService;
 
     @Transactional
     public void savePreferences(String email, PreferenceRequest request) {
@@ -57,19 +55,25 @@ public class PreferenceService {
             throw new BusinessException(ErrorCode.TAG_NOT_FOUND);
         }
 
-        // 5. 기존 취향 태그 전체 삭제 (온보딩 재시도 시 덮어쓰기)
-        userPreferenceRepository.deleteByUser(user);
+        // 5. 회원가입 태그는 한 번만 등록 가능 (이후 수정 불가 정책)
+        //    프론트는 회원가입 흐름에서만 호출하지만,
+        //    API 직접 호출에 대비한 백엔드 안전망
+        if (userPreferenceRepository.existsByUser(user)) {
+            throw new BusinessException(ErrorCode.PREFERENCE_ALREADY_REGISTERED);
+        }
 
         // 6. 새 UserPreference 생성 후 저장
         List<UserPreference> preferences = tags.stream()
                 .map(tag -> UserPreference.builder()
                         .user(user)
                         .tag(tag)
-                        .score(DEFAULT_SCORE)
                         .build())
                 .toList();
 
         userPreferenceRepository.saveAll(preferences);
+
+        // 7. 회원가입 태그를 ZSET 시드로 흘려보냄
+        tasteTagService.addSeedScores(user.getId(), request.getTagIds());
 
         log.info("[savePreferences] 저장 완료 - userId: {}, tagCount: {}", user.getId(), tags.size());
     }

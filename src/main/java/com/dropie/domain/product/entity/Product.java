@@ -49,10 +49,14 @@ public class Product extends BaseEntity {
     @Version
     private Long version;
 
+    // @Builder.Default가 없으면 Lombok @Builder가 = new ArrayList<>() 초기값을 무시해
+    // builder()로 만든 객체는 null이 됨 → product.getProductTags().stream() 호출 시 NPE
     @OneToMany(mappedBy = "product")
+    @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
 
     @OneToMany(mappedBy = "product")
+    @Builder.Default
     private List<ProductTag> productTags = new ArrayList<>();
 
     // PATCH 부분 업데이트 — null이면 기존 값 유지

@@ -44,6 +44,7 @@ public enum ErrorCode {
 
     // 태그
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 태그입니다."),                         // 404
+    PREFERENCE_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 취향 태그가 등록되어 있습니다."),
 
     // 배송지
     ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 배송지입니다."),                   // 404
