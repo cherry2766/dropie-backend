@@ -17,10 +17,10 @@ import java.util.List;
 
 /**
  * 앱 실행 시 초기 데이터를 DB에 심어주는 클래스
- *
+ * <p>
  * ApplicationRunner를 구현하면 Spring Boot가 완전히 뜬 직후 run() 메서드를 자동으로 호출함
  * → JPA, Security 등 모든 빈이 준비된 상태에서 실행되므로 안전하게 DB 작업 가능
- *
+ * <p>
  * 관리자 회원가입 API를 외부에 열면 누구나 관리자가 될 수 있어 위험
  * → 앱 실행 시 한 번만 자동으로 만들고, 이미 있으면 건너뜀
  */
@@ -85,7 +85,14 @@ public class DataInitializer implements ApplicationRunner {
                 "녹차", "빵류", "도넛류", "고소한", "시즌한정"
         );
 
-        tagNames.forEach(name -> tagRepository.save(Tag.builder().name(name).build()));
-        log.info("[DataInitializer] 태그 {}개 생성 완료", tagNames.size());
+        // 회원가입에서 보여줄 큐레이션 10개 → onboardingExposed=true
+        // (어드민이 이후 추가하는 태그는 false로 들어가 회원가입엔 안 노출됨)
+        tagNames.forEach(name -> tagRepository.save(
+                Tag.builder()
+                        .name(name)
+                        .onboardingExposed(true)
+                        .build()
+        ));
+        log.info("[DataInitializer] 태그 {}개 생성 완료 (onboarding-exposed)", tagNames.size());
     }
 }

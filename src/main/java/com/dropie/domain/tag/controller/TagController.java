@@ -3,30 +3,31 @@ package com.dropie.domain.tag.controller;
 import com.dropie.domain.tag.dto.response.TagResponse;
 import com.dropie.domain.tag.service.TagService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Slf4j
 @RestController
-@RequestMapping("/tags")
 @RequiredArgsConstructor
 public class TagController {
 
     private final TagService tagService;
 
-    // 전체 태그 목록 조회
-    // GET /tags
-    // 인증 필요 (온보딩 플로우 상 회원가입 이후 호출되므로 로그인 상태에서 요청됨)
-    // Response: [{ "id": 1, "name": "#달콤한" }, ...]
-    @GetMapping
-    public ResponseEntity<List<TagResponse>> getTags() {
-        log.debug("[GET /tags]");
-        return ResponseEntity.ok(tagService.getTags());
+    // 회원가입 화면 — onboardingExposed=true 만
+    @GetMapping("/tags")
+    public ResponseEntity<List<TagResponse>> getOnboardingTags() {
+        return ResponseEntity.ok(tagService.getOnboardingTags());
     }
 
+    // 어드민 자동완성 — 상품 등록 화면에서 태그 입력 시 부분 일치 검색
+    //   GET /admin/tags?keyword=초    → "초콜릿", "초코칩" 등 노출
+    @GetMapping("/admin/tags")
+    public ResponseEntity<List<TagResponse>> searchAdminTags(
+            @RequestParam(required = false, defaultValue = "") String keyword
+    ) {
+        return ResponseEntity.ok(tagService.searchForAdmin(keyword));
+    }
 }
