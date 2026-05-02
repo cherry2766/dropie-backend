@@ -25,7 +25,4 @@ public class UserPreference extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tag_id", nullable = false)
     private Tag tag;
-
-    @Column(nullable = false)
-    private int score;
 }
