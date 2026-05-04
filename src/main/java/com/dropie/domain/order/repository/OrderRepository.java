@@ -71,4 +71,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.id = :orderId
             """)
     Optional<Order> findByIdWithItemsAndTags(@Param("orderId") Long orderId);
+
+    // 사용자의 PAID 상태 주문 전체에서 ProductTag.tagId 만 추출
+    @Query("""
+        SELECT pt.tag.id
+        FROM Order o
+        JOIN o.orderItems oi
+        JOIN oi.product p
+        JOIN p.productTags pt
+        WHERE o.user.id = :userId
+          AND o.status = com.dropie.domain.order.entity.OrderStatus.PAID
+        """)
+    List<Long> findPaidOrderTagIdsByUserId(@Param("userId") Long userId);
 }
