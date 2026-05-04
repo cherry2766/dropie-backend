@@ -2,7 +2,11 @@ package com.dropie.domain.user.repository;
 
 import com.dropie.domain.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 // JpaRepository<엔티티타입, PK타입> 을 상속하면
@@ -13,10 +17,25 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // findByEmail → "SELECT * FROM users WHERE email = ?" 쿼리가 자동 생성됨
     Optional<User> findByEmail(String email);
 
-    // email이 이미 존재하는지 확인 (회원가입 중복 체크용)
-    // existsBy~ → "SELECT COUNT(*) > 0 FROM users WHERE email = ?" 자동 생성
+    // 회원가입 2단계 체크에서 "최근 탈퇴 이메일" 검사용 + DataInitializer admin 시드 중복 체크
     boolean existsByEmail(String email);
 
-    // 닉네임 중복 확인
-    boolean existsByNickname(String nickname);
+    // 활성 유저(미탈퇴) 중에 동일 이메일이 있는지 확인
+    boolean existsByEmailAndDeletedAtIsNull(String email);
+
+    // 활성 유저(미탈퇴) 중에 동일 닉네임이 있는지 확인
+    boolean existsByNicknameAndDeletedAtIsNull(String nickname);
+
+    // 마스킹 배치 대상 조회
+    // -> 탈퇴한 지 30일 이상 지났고, 아직 이메일이 마스킹되지 않은 유저
+    @Query("""
+            SELECT u 
+            FROM User u 
+            WHERE u.deletedAt < :threshold
+            AND u.email NOT LIKE CONCAT(:prefix, '%') 
+            """)
+    List<User> findByDeletedAtBeforeAndEmailNotStartingWith(
+            @Param("threshold") LocalDateTime threshold,
+            @Param("prefix") String prefix
+    );
 }

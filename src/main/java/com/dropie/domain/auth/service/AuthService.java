@@ -1,30 +1,29 @@
 package com.dropie.domain.auth.service;
 
+import com.dropie.domain.auth.dto.request.LoginRequest;
+import com.dropie.domain.auth.dto.request.SignUpRequest;
+import com.dropie.domain.auth.dto.response.LoginResponse;
 import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.entity.RefreshToken;
 import com.dropie.domain.auth.repository.RefreshTokenRepository;
 import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
-import com.dropie.domain.auth.dto.request.LoginRequest;
-import com.dropie.domain.auth.dto.request.SignUpRequest;
-import com.dropie.domain.auth.dto.response.LoginResponse;
+import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.email.EmailVerificationService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.exception.custom.UserNotFoundException;
-import com.dropie.domain.user.repository.UserRepository;
-import com.dropie.global.exception.custom.UserWithdrawnException;
 import com.dropie.global.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -59,15 +58,21 @@ public class AuthService {
     public SignUpResponse signUp(SignUpRequest request) {
         log.debug("[signUp] 요청 들어옴 - email: {}", request.getEmail());
 
-        // 이메일 중복 확인
-        if (userRepository.existsByEmail(request.getEmail())) {
-            log.warn("[signUp] 이메일 중복 - email: {}", request.getEmail());
+        // 이메일 1단계 : 활성 유저 중복 체크 -> 영구 차단
+        if (userRepository.existsByEmailAndDeletedAtIsNull(request.getEmail())) {
+            log.warn("[signUp] 이메일 중복 (활성 유저) - email: {}", request.getEmail());
             throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
         }
 
-        // 닉네임 중복 확인
-        if (userRepository.existsByNickname(request.getNickname())) {
-            log.warn("[signUp] 닉네임 중복 - nickname: {}", request.getNickname());
+        // 이메일 2단계 : 최근 탈퇴 유저 중복 체크 -> 30일 시한부
+        if (userRepository.existsByEmail(request.getEmail())) {
+            log.warn("[signUp] 최근 탈퇴 이메일 재가입 시도 - email: {}", request.getEmail());
+            throw new BusinessException(ErrorCode.RECENTLY_WITHDRAWN_EMAIL);
+        }
+
+        // 닉네임 : 활성 유저 중복만 체크, 다른 사용자가 탈퇴자와 같은 닉네임으로 즉시 가입 가능
+        if (userRepository.existsByNicknameAndDeletedAtIsNull(request.getNickname())) {
+            log.warn("[signUp] 닉네임 중복 (활성 유저) - nickname: {}", request.getNickname());
             throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
         }
 
@@ -112,7 +117,7 @@ public class AuthService {
         // → deletedAt이 null이 아니면 소프트 딜리트된 유저 → 로그인 차단
         if (user.getDeletedAt() != null) {
             log.warn("[login] 탈퇴한 계정 로그인 시도 - email: {}", request.getEmail());
-            throw new UserWithdrawnException();
+            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {

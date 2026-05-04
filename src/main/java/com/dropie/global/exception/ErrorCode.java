@@ -22,7 +22,8 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다."),                       // 404
     DUPLICATE_EMAIL(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),                      // 409 - 회원가입 시 이메일 중복
     DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),                   // 409 - 닉네임 중복
-    ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "탈퇴한 계정입니다."),                        // 401 - 소프트 딜리트된 유저가 로그인 시도 시
+    ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "탈퇴한 계정입니다."),                        // 401 - 소프트 딜리트된 유저가 로그인 시도 시, 로그인 차단
+    RECENTLY_WITHDRAWN_EMAIL(HttpStatus.CONFLICT, "최근 탈퇴한 계정입니다. 30일 후 재가입 가능합니다."), // 409 - 최근 탈퇴한 이메일 — 30일 유예 후 재가입 가능, 회원가입 차단
 
     // 이벤트
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 이벤트입니다."),                      // 404

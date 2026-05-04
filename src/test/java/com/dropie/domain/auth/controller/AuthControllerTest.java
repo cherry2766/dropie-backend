@@ -1,7 +1,6 @@
 package com.dropie.domain.auth.controller;
 
 import com.dropie.domain.auth.dto.response.LoginResponse;
-import com.dropie.domain.auth.dto.response.PasswordResetResponse;
 import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.service.AuthService;
 import com.dropie.global.config.SecurityConfig;
@@ -110,6 +109,25 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE_EMAIL"));
+    }
+
+    @Test
+    @DisplayName("POST /auth/signup - 최근 탈퇴 이메일로 가입 시 409 RECENTLY_WITHDRAWN_EMAIL")
+    void 회원가입_최근_탈퇴_이메일_409() throws Exception {
+        given(authService.signUp(any()))
+                .willThrow(new BusinessException(ErrorCode.RECENTLY_WITHDRAWN_EMAIL));
+
+        mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                              {
+                                  "email": "test@email.com",
+                                  "password": "password123",
+                                  "nickname": "체리"
+                              }
+                              """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RECENTLY_WITHDRAWN_EMAIL"));
     }
 
     @Test
