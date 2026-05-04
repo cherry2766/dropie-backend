@@ -1,19 +1,18 @@
 package com.dropie.domain.auth.service;
 
+import com.dropie.domain.auth.dto.request.LoginRequest;
+import com.dropie.domain.auth.dto.request.SignUpRequest;
+import com.dropie.domain.auth.dto.response.LoginResponse;
+import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.auth.entity.RefreshToken;
 import com.dropie.domain.auth.repository.RefreshTokenRepository;
 import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.user.entity.Role;
 import com.dropie.domain.user.entity.User;
-import com.dropie.domain.auth.dto.request.LoginRequest;
-import com.dropie.domain.auth.dto.request.SignUpRequest;
-import com.dropie.domain.auth.dto.response.LoginResponse;
-import com.dropie.domain.auth.dto.response.SignUpResponse;
 import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.email.EmailVerificationService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
-import com.dropie.global.exception.custom.UserWithdrawnException;
 import com.dropie.global.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,7 +69,7 @@ class AuthServiceTest {
         SignUpRequest request = new SignUpRequest("test@email.com", "pwd1234", "강체리");
 
         given(userRepository.existsByEmail("test@email.com")).willReturn(false);
-        given(userRepository.existsByNickname("강체리")).willReturn(false);
+        given(userRepository.existsByNicknameAndDeletedAtIsNull("강체리")).willReturn(false);
         given(passwordEncoder.encode("pwd1234")).willReturn("encoded_pwd");
 
         // when
@@ -84,11 +83,11 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("회원가입 실패 - 이메일 중복")
+    @DisplayName("회원가입 실패 - 활성 유저 이메일 중복")
     void 회원가입_중복이메일_예외() {
         // given
         SignUpRequest request = new SignUpRequest("test2@email.com", "pwd789", "강딸기");
-        given(userRepository.existsByEmail("test2@email.com")).willReturn(true);
+        given(userRepository.existsByEmailAndDeletedAtIsNull("test2@email.com")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> authService.signUp(request))
@@ -98,12 +97,13 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("회원가입 실패 - 닉네임 중복")
+    @DisplayName("회원가입 실패 - 활성 유저 닉네임 중복")
     void 회원가입_중복닉네임_예외() {
         // given
         SignUpRequest request = new SignUpRequest("new@email.com", "pwd789", "강딸기");
+        given(userRepository.existsByEmailAndDeletedAtIsNull("new@email.com")).willReturn(false);
         given(userRepository.existsByEmail("new@email.com")).willReturn(false);
-        given(userRepository.existsByNickname("강딸기")).willReturn(true);
+        given(userRepository.existsByNicknameAndDeletedAtIsNull("강딸기")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> authService.signUp(request))
@@ -111,6 +111,53 @@ class AuthServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.DUPLICATE_NICKNAME);
     }
+
+    @Test
+    @DisplayName("회원가입 실패 - 30일 미경과 탈퇴 이메일이면 RECENTLY_WITHDRAWN_EMAIL")
+    void 회원가입_최근_탈퇴_이메일_예외() {
+        SignUpRequest request = new SignUpRequest("test@email.com", "pwd1234", "체리");
+        given(userRepository.existsByEmailAndDeletedAtIsNull("test@email.com")).willReturn(false);
+        // 활성 유저는 아니지만 row 자체는 존재 = 탈퇴 후 마스킹 전
+        given(userRepository.existsByEmail("test@email.com")).willReturn(true);
+
+        assertThatThrownBy(() -> authService.signUp(request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.RECENTLY_WITHDRAWN_EMAIL);
+    }
+
+    @Test
+    @DisplayName("회원가입 성공 - 30일 경과 후 마스킹된 이메일은 신규 가입 허용")
+    void 회원가입_마스킹_후_재가입_성공() {
+        SignUpRequest request = new SignUpRequest("test@email.com", "pwd1234", "체리");
+        // 마스킹된 row의 email은 "withdrawn_42@masked.local"이라 어디에도 안 걸림
+        given(userRepository.existsByEmailAndDeletedAtIsNull("test@email.com")).willReturn(false);
+        given(userRepository.existsByEmail("test@email.com")).willReturn(false);
+        given(userRepository.existsByNicknameAndDeletedAtIsNull("체리")).willReturn(false);
+        given(passwordEncoder.encode("pwd1234")).willReturn("encoded_pwd");
+
+        SignUpResponse response = authService.signUp(request);
+
+        assertThat(response.getEmail()).isEqualTo("test@email.com");
+        then(userRepository).should().save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("회원가입 성공 - 탈퇴자가 쓰던 닉네임은 즉시 재사용 가능")
+    void 회원가입_탈퇴자_닉네임_즉시_재사용_성공() {
+        SignUpRequest request = new SignUpRequest("new@email.com", "pwd1234", "체리");
+        // 활성 유저 중에는 같은 닉네임 없음
+        given(userRepository.existsByEmailAndDeletedAtIsNull("new@email.com")).willReturn(false);
+        given(userRepository.existsByEmail("new@email.com")).willReturn(false);
+        given(userRepository.existsByNicknameAndDeletedAtIsNull("체리")).willReturn(false);
+        given(passwordEncoder.encode("pwd1234")).willReturn("encoded_pwd");
+
+        SignUpResponse response = authService.signUp(request);
+
+        assertThat(response.getEmail()).isEqualTo("new@email.com");
+        then(userRepository).should().save(any(User.class));
+    }
+
 
     // ===================== login =====================
 
@@ -311,7 +358,9 @@ class AuthServiceTest {
 
         // when & then
         assertThatThrownBy(() -> authService.login(request, mockResponse))
-                .isInstanceOf(UserWithdrawnException.class);
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ACCOUNT_WITHDRAWN);
     }
 
     // ===================== showOnboarding =====================

@@ -12,7 +12,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "users")
+@Table(
+        name = "users",
+        indexes = {
+                // 마스킹 배치(UserMaskingScheduler.maskWithdrawnUsers)의 deletedAt 범위 조건 가속용
+                @Index(name = "idx_users_deleted_at", columnList = "deletedAt")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -89,6 +95,13 @@ public class User extends BaseEntity {
     // → 탈퇴 후에도 주문/이력 데이터를 보존할 수 있고, 실수로 탈퇴한 경우 복구도 가능
     public void withdraw() {
         this.deletedAt = LocalDateTime.now();
+        this.nickname = "탈퇴회원_" + this.id;
+    }
+
+    // 30일 경과 시 스케줄러가 호출 — 이메일 마스킹
+    // → 마스킹 후에는 동일 이메일로의 신규 가입이 가능 (unique 제약 충돌 방지)
+    public void maskPersonalInfo() {
+        this.email = "withdrawn_" + this.id + "@masked.local";
     }
 
     // 닉네임 수정

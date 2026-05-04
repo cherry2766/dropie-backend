@@ -3,11 +3,11 @@ package com.dropie.domain.user.service;
 import com.dropie.domain.auth.entity.RefreshToken;
 import com.dropie.domain.auth.repository.RefreshTokenRepository;
 import com.dropie.domain.preference.repository.UserPreferenceRepository;
-import com.dropie.domain.user.entity.Role;
-import com.dropie.domain.user.entity.User;
 import com.dropie.domain.user.dto.request.UpdateNicknameRequest;
 import com.dropie.domain.user.dto.request.UpdateProfileImageRequest;
 import com.dropie.domain.user.dto.response.UserResponse;
+import com.dropie.domain.user.entity.Role;
+import com.dropie.domain.user.entity.User;
 import com.dropie.domain.user.repository.UserRepository;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
@@ -19,6 +19,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.Field;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -265,7 +266,7 @@ class UserServiceTest {
                 .build();
 
         given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
-        given(userRepository.existsByNickname("딸기")).willReturn(false);
+        given(userRepository.existsByNicknameAndDeletedAtIsNull("딸기")).willReturn(false);
 
         // when
         UserResponse response = userService.updateNickname("test@email.com", new UpdateNicknameRequest("딸기"));
@@ -294,7 +295,7 @@ class UserServiceTest {
         // then
         assertThat(response.getNickname()).isEqualTo("체리");
         // 본인 닉네임과 같으면 existsByNickname 호출하지 않아야 함
-        then(userRepository).should(never()).existsByNickname(anyString());
+        then(userRepository).should(never()).existsByNicknameAndDeletedAtIsNull(anyString());
     }
 
     @Test
@@ -309,7 +310,7 @@ class UserServiceTest {
                 .build();
 
         given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
-        given(userRepository.existsByNickname("딸기")).willReturn(true);
+        given(userRepository.existsByNicknameAndDeletedAtIsNull("딸기")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> userService.updateNickname("test@email.com", new UpdateNicknameRequest("딸기")))
@@ -362,5 +363,28 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.updateProfileImage("ghost@email.com",
                 new UpdateProfileImageRequest("https://s3.amazonaws.com/profiles/new.jpg")))
                 .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 - deletedAt 기록 + 닉네임 즉시 마스킹")
+    void 회원_탈퇴_닉네임_즉시_마스킹() throws Exception {
+        User user = User.builder()
+                .email("test@email.com")
+                .password("pw")
+                .nickname("체리")
+                .role(Role.USER)
+                .build();
+        // id는 @GeneratedValue라 빌더로 못 넣음 → 리플렉션으로 강제 주입
+        Field idField = User.class.getDeclaredField("id");
+        idField.setAccessible(true);
+        idField.set(user, 42L);
+        given(userRepository.findByEmail("test@email.com")).willReturn(Optional.of(user));
+
+        userService.withdraw("test@email.com");
+
+        assertThat(user.getDeletedAt()).isNotNull();
+        assertThat(user.getNickname()).isEqualTo("탈퇴회원_42");
+        // 이메일은 아직 그대로 (30일 후 스케줄러가 마스킹)
+        assertThat(user.getEmail()).isEqualTo("test@email.com");
     }
 }

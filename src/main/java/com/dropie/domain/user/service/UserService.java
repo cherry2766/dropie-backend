@@ -91,7 +91,7 @@ public class UserService {
 
         // 본인의 현재 닉네임과 동일하면 중복체크 건너뜀
         if (!user.getNickname().equals(request.getNickname())
-                && userRepository.existsByNickname(request.getNickname())) {
+                && userRepository.existsByNicknameAndDeletedAtIsNull(request.getNickname())) {
             throw new BusinessException(ErrorCode.DUPLICATE_NICKNAME);
         }
 
