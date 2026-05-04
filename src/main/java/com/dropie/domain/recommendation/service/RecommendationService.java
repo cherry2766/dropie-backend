@@ -4,6 +4,8 @@ import com.dropie.domain.event.entity.Event;
 import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.repository.EventRepository;
 import com.dropie.domain.event.service.PopularEventService;
+import com.dropie.domain.order.repository.OrderRepository;
+import com.dropie.domain.preference.repository.UserPreferenceRepository;
 import com.dropie.domain.product.entity.Product;
 import com.dropie.domain.recommendation.client.ClaudeApiClient;
 import com.dropie.domain.recommendation.dto.response.RecommendationResponse;
@@ -44,6 +46,8 @@ public class RecommendationService {
     private final ClaudeApiClient claudeApiClient;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final UserPreferenceRepository userPreferenceRepository;
+    private final OrderRepository orderRepository;
 
     private static final String CACHE_KEY_PREFIX = "recommendation:user:";
     private static final Duration CACHE_TTL = Duration.ofMinutes(60);
@@ -70,21 +74,30 @@ public class RecommendationService {
         // 2) 새로 계산
         List<RecommendationResponse> result = computeRecommendation(userId);
 
-        // 3) 캐시 저장 (실패해도 응답엔 영향 없게)
-        try {
-            redisTemplate.opsForValue().set(
-                    cacheKey(userId),
-                    objectMapper.writeValueAsString(result),
-                    CACHE_TTL
-            );
-        } catch (JsonProcessingException e) {
-            log.warn("[Recommendation] 캐시 직렬화 실패", e);
+        // 3) 빈 결과는 캐시하지 않음
+        // → 빈 결과 캐시 시: 그 사이 주문/시드가 들어와도 60분 동안 빈 배열이 노출되는 버그 발생
+        // → 정상 결과만 60분 캐시해서, 빈 상태에서 데이터가 채워지면 즉시 새 추천 반영되도록 함
+        if (!result.isEmpty()) {
+            try {
+                redisTemplate.opsForValue().set(
+                        cacheKey(userId),
+                        objectMapper.writeValueAsString(result),
+                        CACHE_TTL
+                );
+            } catch (JsonProcessingException e) {
+                log.warn("[Recommendation] 캐시 직렬화 실패", e);
+            }
         }
-
         return result;
     }
 
     private List<RecommendationResponse> computeRecommendation(Long userId) {
+
+        // ZSET이 비어있으면 DB의 회원가입 태그 + 기존 PAID 주문 태그를 한 번 시드
+        // → 기존 회원(시드 코드 도입 이전 가입자) 자동 복구
+        // → Redis 휘발 시 자동 복구까지 같은 메서드로 커버 (멱등성: 이미 점수 있으면 즉시 리턴)
+        syncFromDbIfEmpty(userId);
+
         // 사용자 상위 태그 — 시드 + 주문 누적이 합쳐진 결과
         List<Long> topTagIds = tasteTagService.getTopTagIds(userId, TOP_TAG_LIMIT);
 
@@ -118,6 +131,31 @@ public class RecommendationService {
                 .map(event -> buildResponse(event, tagNames))
                 .filter(Objects::nonNull)
                 .toList();
+    }
+
+    // ZSET 비어있는 사용자에 한해 DB → ZSET 동기화
+    // → 신규 가입자는 PreferenceService에서 이미 시드 호출 → ZSET 점수 있음 → 즉시 리턴 (멱등성)
+    // → 기존 가입자 / Redis 휘발 사용자만 실제 시드 수행
+    private void syncFromDbIfEmpty(Long userId) {
+        List<Long> existing = tasteTagService.getTopTagIds(userId, 1);
+        if (!existing.isEmpty()) {
+            return; // 이미 ZSET에 점수 있음 — 신규 가입자 또는 이미 동기화된 사용자
+        }
+
+        // 1) 회원가입 태그 시드 (+0.5점씩)
+        List<Long> seedTagIds = userPreferenceRepository.findTagIdsByUserId(userId);
+        if (!seedTagIds.isEmpty()) {
+            tasteTagService.addSeedScores(userId, seedTagIds);
+        }
+
+        // 2) 기존 PAID 주문의 태그 누적 (+1.0점씩, 같은 태그 중복이면 그만큼 누적)
+        List<Long> orderTagIds = orderRepository.findPaidOrderTagIdsByUserId(userId);
+        if (!orderTagIds.isEmpty()) {
+            tasteTagService.addTagScores(userId, orderTagIds);
+        }
+
+        log.info("[Recommendation] ZSET lazy 동기화 - userId={}, seedCount={}, orderCount={}",
+                userId, seedTagIds.size(), orderTagIds.size());
     }
 
     private List<Event> popularEventCandidates() {
@@ -165,12 +203,13 @@ public class RecommendationService {
 
                 [작성 조건]
                 - 한국어로 작성
-                - 1~3문장
-                - 너무 과장하지 말 것
-                - 사용자의 취향 태그와 상품 특징을 자연스럽게 연결할 것
-                - 구매를 강요하는 표현은 피할 것
-                - 포근하고 감성적인 톤
-                - 이모지는 사용하지 말 것
+                - 1~2문장, 전체 60자 이내로 짧고 임팩트 있게
+                - 첫 문장은 상품의 결정적 특징을 감각적으로 묘사 (맛/향/질감/색 중 하나)
+                - 사용자의 취향 태그를 한 단어라도 자연스럽게 녹일 것
+                - 형용사보다 구체 명사·동사 사용 ("부드럽다" 대신 "한입에 무너진다", "최고의" 같은 막연한 표현 금지)
+                - 권유는 마지막 한 단어로만 가볍게 (예: "어울려요", "추천해요"). 강요/광고체 금지
+                - 명사형 종결("~한 한 조각.")이나 담백한 평서문 가능
+                - 이모지 사용 금지
 
                 [출력 형식]
                 추천 문구만 출력해줘.
