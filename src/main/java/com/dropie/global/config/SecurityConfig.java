@@ -52,6 +52,12 @@ public class SecurityConfig {
                 // 4. 요청별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()    // 회원가입, 로그인은 누구나 접근 가능
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**"
+                        ).permitAll()   // Swagger API 문서 — 비로그인 상태로도 접근 가능해야 문서 페이지가 정상적으로 뜸
                         .requestMatchers(HttpMethod.GET, "/events/**").permitAll() // 이벤트, 상품 조회 접근 가능
                         .requestMatchers("/ws-stomp/**").permitAll() // WebSocket 핸드셰이크 (재고 broadcast는 공개 정보)
                         .requestMatchers("/admin/**").hasRole("ADMIN") // 관리자만 접근 가능
