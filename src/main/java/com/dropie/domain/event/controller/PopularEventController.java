@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Recommendation", description = "AI 개인화 추천 — Redis ZSET + Claude API")
+@Tag(name = "인기 이벤트", description = "Redis ZSET 기반 실시간 TOP 10 (최근 7일)")
 @Slf4j
 @RestController
 @RequestMapping("/events")

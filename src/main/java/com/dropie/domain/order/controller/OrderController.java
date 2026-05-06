@@ -27,7 +27,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Order", description = "주문 도메인 — 동시성 제어 핵심 API")
+@Tag(name = "주문 · 결제", description = "동시성 제어 핵심 — Redisson 분산락 + 비관적 락 멱등 결제")
 @Slf4j
 @Validated
 @RestController

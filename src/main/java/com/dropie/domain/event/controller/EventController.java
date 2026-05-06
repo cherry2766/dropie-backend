@@ -6,6 +6,7 @@ import com.dropie.domain.event.dto.response.LineupRoundResponse;
 import com.dropie.domain.event.entity.EventStatus;
 import com.dropie.domain.event.service.EventService;
 import com.dropie.global.common.PageResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "이벤트", description = "이벤트 목록·상세 조회 (Derived Status 응답 시점 계산)")
 @Slf4j
 @Validated
 @RestController

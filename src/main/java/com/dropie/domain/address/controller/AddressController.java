@@ -7,6 +7,7 @@ import com.dropie.domain.address.dto.response.AddressResponse;
 import com.dropie.domain.address.dto.response.AddressUpdateResponse;
 import com.dropie.domain.address.service.AddressService;
 import com.dropie.global.security.CustomUserDetails;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "배송지", description = "사용자 배송지 목록·추가·수정·삭제 (기본 배송지 1건 보장)")
 @Slf4j
 @RestController
 @RequestMapping("/users/me/addresses")
