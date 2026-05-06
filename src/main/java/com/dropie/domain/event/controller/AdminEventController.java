@@ -8,6 +8,7 @@ import com.dropie.domain.event.dto.response.AdminEventResponse;
 import com.dropie.domain.event.dto.response.EventStatusResponse;
 import com.dropie.domain.event.dto.response.EventUpdateResponse;
 import com.dropie.domain.event.service.AdminEventService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "관리자 - 이벤트", description = "이벤트 등록·수정·상태 변경·삭제")
 @Slf4j
 @RestController
 @RequestMapping("/admin")

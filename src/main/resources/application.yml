@@ -6,17 +6,6 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: method
     groups-order: asc
-  packages-to-scan:
-    - com.dropie.domain.order
-    - com.dropie.domain.payment
-    - com.dropie.domain.event
-    - com.dropie.domain.recommendation
-  paths-to-match:
-    - /orders
-    - /orders/*/cancel
-    - /orders/*/payment/confirm
-    - /events/popular
-    - /users/me/recommendations
 
 spring:
   application:

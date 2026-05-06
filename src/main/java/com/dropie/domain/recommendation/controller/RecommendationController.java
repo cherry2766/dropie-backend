@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Recommendation", description = "AI 개인화 추천 — Redis ZSET + Claude API")
+@Tag(name = "추천 (AI)", description = "Redis ZSET + Claude API 기반 개인화 추천 — 4분기 시나리오 단일 통합 + lazy 동기화")
 @Slf4j
 @RestController
 @RequestMapping("/users/me")

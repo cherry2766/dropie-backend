@@ -2,6 +2,7 @@ package com.dropie.domain.payment.controller;
 
 import com.dropie.domain.payment.dto.request.TossWebhookRequest;
 import com.dropie.domain.payment.repository.PaymentRepository;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "결제 웹훅", description = "토스페이먼츠 웹훅 수신 — 프론트 콜백 누락 시 안전망")
 @RestController
 @RequestMapping("/webhooks")
 @RequiredArgsConstructor

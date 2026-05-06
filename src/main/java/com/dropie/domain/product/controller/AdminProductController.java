@@ -8,6 +8,7 @@ import com.dropie.domain.product.dto.response.ProductCreateResponse;
 import com.dropie.domain.product.dto.response.ProductStockResponse;
 import com.dropie.domain.product.dto.response.ProductUpdateResponse;
 import com.dropie.domain.product.service.AdminProductService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "관리자 - 상품", description = "상품 등록·수정·재고 관리·태그 자동 생성 (find-or-create)")
 @Slf4j
 @RestController
 @RequestMapping("/admin")

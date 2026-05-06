@@ -7,6 +7,7 @@ import com.dropie.domain.user.service.UserService;
 import com.dropie.global.s3.PresignedUrlRequest;
 import com.dropie.global.s3.PresignedUrlResponse;
 import com.dropie.global.s3.S3Service;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import com.dropie.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -19,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "사용자", description = "내 정보 조회·수정·프로필 이미지 업로드·회원 탈퇴 (30일 유예)")
 @Slf4j
 @Validated
 @RestController

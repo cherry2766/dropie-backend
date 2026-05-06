@@ -8,6 +8,7 @@ import com.dropie.domain.auth.service.AuthService;
 import com.dropie.global.email.PasswordResetService;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 
+@Tag(name = "인증", description = "회원가입·로그인·비밀번호 재설정·이메일 인증")
 @Slf4j
 @RestController
 @RequestMapping("/auth")
