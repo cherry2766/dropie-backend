@@ -40,4 +40,5 @@ out/
 application-local.yml
 .claude/
 CLAUDE.md
-docs/
+docs/*
+!docs/concurrency-test-result.md

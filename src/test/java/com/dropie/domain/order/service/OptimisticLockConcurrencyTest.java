@@ -23,6 +23,7 @@ import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,8 +34,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 // @Transactional 사용 금지
 // 테스트 메서드에 @Transactional이 붙으면 각 스레드의 트랜잭션이 하나로 묶여
@@ -76,6 +81,15 @@ class OptimisticLockConcurrencyTest {
 
     @BeforeEach
     void setUp() {
+        // StringRedisTemplate Mock 스텁
+        // → OrderService.generateOrderNumber()가 redisTemplate.opsForValue().increment(key)를 호출함
+        // → Mock 기본 동작은 opsForValue()가 null을 반환 → NPE → 모든 주문이 실패로 잡힘
+        // → AtomicLong으로 INCR을 인메모리 재현 (Redis INCR과 동일하게 원자적 시퀀스 보장)
+        AtomicLong orderSeq = new AtomicLong(0);
+        ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.increment(anyString())).willAnswer(inv -> orderSeq.incrementAndGet());
+
         // 판매 중인 이벤트 — validateEventTime() 통과를 위해 현재 시각 기준으로 설정
         Event event = eventRepository.save(Event.builder()
                 .brandName("동시성 테스트 브랜드")
@@ -187,5 +201,129 @@ class OptimisticLockConcurrencyTest {
                 "→ 재고가 있는데 못 판 수량: %d개 (ORDER_CONFLICT로 인한 미판매)%n",
                 updated.getStock()
         );
+    }
+
+    // 이력서·포폴 수치 산출용 자동 측정 — 15회 반복 후 평균/최소/최대 출력
+    // 매 회차마다 DB를 리셋해 독립된 동일 조건으로 재현
+    @Test
+    @DisplayName("낙관적 락 — 15회 반복 측정 (이력서 수치 산출용)")
+    void 낙관적_락_15회_반복_측정() throws InterruptedException {
+        int runs = 15;
+        int[][] results = new int[runs][3]; // [success, conflict, remaining]
+
+        System.out.println();
+        System.out.println("========== 낙관적 락 15회 반복 측정 ==========");
+        System.out.printf("초기 재고: %d / 동시 주문: %d스레드%n", INITIAL_STOCK, THREAD_COUNT);
+        System.out.println("----------------------------------------------");
+
+        for (int run = 1; run <= runs; run++) {
+            // FK 순서대로 자식 → 부모 정리
+            orderItemRepository.deleteAll();
+            orderRepository.deleteAll();
+            productRepository.deleteAll();
+            eventRepository.deleteAll();
+            userRepository.deleteAll();
+
+            Event event = eventRepository.save(Event.builder()
+                    .brandName("측정 브랜드")
+                    .status(EventStatus.OPEN)
+                    .startAt(LocalDateTime.now().minusHours(1))
+                    .endAt(LocalDateTime.now().plusHours(1))
+                    .build());
+            Product runProduct = productRepository.save(Product.builder()
+                    .event(event)
+                    .name("측정용 상품")
+                    .price(10000)
+                    .stock(INITIAL_STOCK)
+                    .build());
+            User runUser = userRepository.save(User.builder()
+                    .email("measure" + run + "@test.com")
+                    .password("encoded_password")
+                    .nickname("측정" + run)
+                    .role(Role.USER)
+                    .build());
+
+            int[] r = runConcurrentOptimisticOrders(runProduct, runUser);
+            results[run - 1] = r;
+
+            System.out.printf("[Run %2d] 성공 %2d건 / 재시도 소진 %2d건 / 잔여 재고 %2d개%n",
+                    run, r[0], r[1], r[2]);
+        }
+
+        // 통계 산출
+        int sumSuccess = 0, sumConflict = 0, sumRemaining = 0;
+        int minSuccess = Integer.MAX_VALUE, maxSuccess = Integer.MIN_VALUE;
+        int minConflict = Integer.MAX_VALUE, maxConflict = Integer.MIN_VALUE;
+        int minRemaining = Integer.MAX_VALUE, maxRemaining = Integer.MIN_VALUE;
+        for (int[] r : results) {
+            sumSuccess += r[0]; sumConflict += r[1]; sumRemaining += r[2];
+            minSuccess = Math.min(minSuccess, r[0]); maxSuccess = Math.max(maxSuccess, r[0]);
+            minConflict = Math.min(minConflict, r[1]); maxConflict = Math.max(maxConflict, r[1]);
+            minRemaining = Math.min(minRemaining, r[2]); maxRemaining = Math.max(maxRemaining, r[2]);
+        }
+        double avgSuccess = sumSuccess / (double) runs;
+        double avgConflict = sumConflict / (double) runs;
+        double avgRemaining = sumRemaining / (double) runs;
+
+        System.out.println("----------------------------------------------");
+        System.out.printf("[평균]    성공 %.2f건 / 재시도 소진 %.2f건 / 잔여 재고 %.2f개%n",
+                avgSuccess, avgConflict, avgRemaining);
+        System.out.printf("[최소~최대] 성공 %d~%d / 재시도 소진 %d~%d / 잔여 재고 %d~%d%n",
+                minSuccess, maxSuccess, minConflict, maxConflict, minRemaining, maxRemaining);
+        System.out.printf("[미판매율] 평균 %.2f%% (잔여재고 / 초기재고)%n",
+                avgRemaining / INITIAL_STOCK * 100);
+        System.out.printf("[재시도 소진률] 평균 %.2f%% (재시도 소진 / 동시 주문)%n",
+                avgConflict / THREAD_COUNT * 100);
+        System.out.println("==============================================");
+    }
+
+    private int[] runConcurrentOptimisticOrders(Product runProduct, User runUser) throws InterruptedException {
+        ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(THREAD_COUNT);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger orderConflictCount = new AtomicInteger(0);
+
+        CreateOrderRequest orderRequest = CreateOrderRequest.builder()
+                .receiverName("강체리")
+                .phone("010-1234-5678")
+                .zipcode("12345")
+                .address1("서울시 강남구")
+                .address2("101호")
+                .items(List.of(
+                        CreateOrderRequest.OrderItemRequest.builder()
+                                .productId(runProduct.getId())
+                                .quantity(1)
+                                .build()
+                ))
+                .build();
+        CustomUserDetails userDetails = new CustomUserDetails(runUser);
+
+        for (int i = 0; i < THREAD_COUNT; i++) {
+            executorService.submit(() -> {
+                try {
+                    startLatch.await();
+                    optimisticLockOrderFacade.createOrder(orderRequest, userDetails);
+                    successCount.incrementAndGet();
+                } catch (BusinessException e) {
+                    if (e.getErrorCode() == ErrorCode.ORDER_CONFLICT) {
+                        orderConflictCount.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    orderConflictCount.incrementAndGet();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+        startLatch.countDown();
+        doneLatch.await();
+        executorService.shutdown();
+
+        Product updated = productRepository.findById(runProduct.getId()).get();
+        return new int[]{successCount.get(), orderConflictCount.get(), updated.getStock()};
     }
 }
