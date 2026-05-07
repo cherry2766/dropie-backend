@@ -29,6 +29,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -204,12 +206,13 @@ class OptimisticLockConcurrencyTest {
     }
 
     // 이력서·포폴 수치 산출용 자동 측정 — 15회 반복 후 평균/최소/최대 출력
+    // 처리량(TPS)·응답시간(p50/p95)까지 함께 측정해 트레이드오프 비교 자료 확보
     // 매 회차마다 DB를 리셋해 독립된 동일 조건으로 재현
     @Test
     @DisplayName("낙관적 락 — 15회 반복 측정 (이력서 수치 산출용)")
     void 낙관적_락_15회_반복_측정() throws InterruptedException {
         int runs = 15;
-        int[][] results = new int[runs][3]; // [success, conflict, remaining]
+        RunResult[] results = new RunResult[runs];
 
         System.out.println();
         System.out.println("========== 낙관적 락 15회 반복 측정 ==========");
@@ -243,33 +246,43 @@ class OptimisticLockConcurrencyTest {
                     .role(Role.USER)
                     .build());
 
-            int[] r = runConcurrentOptimisticOrders(runProduct, runUser);
+            RunResult r = runConcurrentOptimisticOrders(runProduct, runUser);
             results[run - 1] = r;
 
-            System.out.printf("[Run %2d] 성공 %2d건 / 재시도 소진 %2d건 / 잔여 재고 %2d개%n",
-                    run, r[0], r[1], r[2]);
+            System.out.printf("[Run %2d] 성공 %2d / 재시도 소진 %2d / 잔여 %2d / TPS %6.1f / p50 %5.1fms / p95 %5.1fms%n",
+                    run, r.success(), r.conflict(), r.remaining(), r.tps(), r.p50Ms(), r.p95Ms());
         }
 
         // 통계 산출
         int sumSuccess = 0, sumConflict = 0, sumRemaining = 0;
+        double sumTps = 0, sumP50 = 0, sumP95 = 0;
         int minSuccess = Integer.MAX_VALUE, maxSuccess = Integer.MIN_VALUE;
         int minConflict = Integer.MAX_VALUE, maxConflict = Integer.MIN_VALUE;
         int minRemaining = Integer.MAX_VALUE, maxRemaining = Integer.MIN_VALUE;
-        for (int[] r : results) {
-            sumSuccess += r[0]; sumConflict += r[1]; sumRemaining += r[2];
-            minSuccess = Math.min(minSuccess, r[0]); maxSuccess = Math.max(maxSuccess, r[0]);
-            minConflict = Math.min(minConflict, r[1]); maxConflict = Math.max(maxConflict, r[1]);
-            minRemaining = Math.min(minRemaining, r[2]); maxRemaining = Math.max(maxRemaining, r[2]);
+        double minTps = Double.MAX_VALUE, maxTps = Double.MIN_VALUE;
+        double minP95 = Double.MAX_VALUE, maxP95 = Double.MIN_VALUE;
+        for (RunResult r : results) {
+            sumSuccess += r.success(); sumConflict += r.conflict(); sumRemaining += r.remaining();
+            sumTps += r.tps(); sumP50 += r.p50Ms(); sumP95 += r.p95Ms();
+            minSuccess = Math.min(minSuccess, r.success()); maxSuccess = Math.max(maxSuccess, r.success());
+            minConflict = Math.min(minConflict, r.conflict()); maxConflict = Math.max(maxConflict, r.conflict());
+            minRemaining = Math.min(minRemaining, r.remaining()); maxRemaining = Math.max(maxRemaining, r.remaining());
+            minTps = Math.min(minTps, r.tps()); maxTps = Math.max(maxTps, r.tps());
+            minP95 = Math.min(minP95, r.p95Ms()); maxP95 = Math.max(maxP95, r.p95Ms());
         }
         double avgSuccess = sumSuccess / (double) runs;
         double avgConflict = sumConflict / (double) runs;
         double avgRemaining = sumRemaining / (double) runs;
+        double avgTps = sumTps / runs;
+        double avgP50 = sumP50 / runs;
+        double avgP95 = sumP95 / runs;
 
         System.out.println("----------------------------------------------");
-        System.out.printf("[평균]    성공 %.2f건 / 재시도 소진 %.2f건 / 잔여 재고 %.2f개%n",
-                avgSuccess, avgConflict, avgRemaining);
-        System.out.printf("[최소~최대] 성공 %d~%d / 재시도 소진 %d~%d / 잔여 재고 %d~%d%n",
-                minSuccess, maxSuccess, minConflict, maxConflict, minRemaining, maxRemaining);
+        System.out.printf("[평균]    성공 %.2f / 재시도 소진 %.2f / 잔여 %.2f / TPS %.2f / p50 %.2fms / p95 %.2fms%n",
+                avgSuccess, avgConflict, avgRemaining, avgTps, avgP50, avgP95);
+        System.out.printf("[최소~최대] 성공 %d~%d / 재시도 소진 %d~%d / 잔여 %d~%d / TPS %.1f~%.1f / p95 %.1f~%.1fms%n",
+                minSuccess, maxSuccess, minConflict, maxConflict, minRemaining, maxRemaining,
+                minTps, maxTps, minP95, maxP95);
         System.out.printf("[미판매율] 평균 %.2f%% (잔여재고 / 초기재고)%n",
                 avgRemaining / INITIAL_STOCK * 100);
         System.out.printf("[재시도 소진률] 평균 %.2f%% (재시도 소진 / 동시 주문)%n",
@@ -277,13 +290,20 @@ class OptimisticLockConcurrencyTest {
         System.out.println("==============================================");
     }
 
-    private int[] runConcurrentOptimisticOrders(Product runProduct, User runUser) throws InterruptedException {
+    // 한 회차 측정 결과 묶음 — 처리량·응답시간 지표까지 포함
+    private record RunResult(int success, int conflict, int remaining,
+                             double tps, double p50Ms, double p95Ms) {}
+
+    private RunResult runConcurrentOptimisticOrders(Product runProduct, User runUser) throws InterruptedException {
         ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch doneLatch = new CountDownLatch(THREAD_COUNT);
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger orderConflictCount = new AtomicInteger(0);
+        // 응답 시간(나노초) 수집 — 성공 케이스만 측정하므로 success 결과 비교 시 표본 수가 락마다 다름에 유의
+        // synchronizedList: 100스레드가 동시에 add() 하므로 thread-safe 컬렉션 필요
+        List<Long> latencies = Collections.synchronizedList(new ArrayList<>());
 
         CreateOrderRequest orderRequest = CreateOrderRequest.builder()
                 .receiverName("강체리")
@@ -304,7 +324,9 @@ class OptimisticLockConcurrencyTest {
             executorService.submit(() -> {
                 try {
                     startLatch.await();
+                    long threadStart = System.nanoTime();
                     optimisticLockOrderFacade.createOrder(orderRequest, userDetails);
+                    latencies.add(System.nanoTime() - threadStart);
                     successCount.incrementAndGet();
                 } catch (BusinessException e) {
                     if (e.getErrorCode() == ErrorCode.ORDER_CONFLICT) {
@@ -319,11 +341,29 @@ class OptimisticLockConcurrencyTest {
                 }
             });
         }
+        // 전체 시작·종료 시각 기록 → TPS = 성공 건수 / 전체 경과 시간(초)
+        long testStartMs = System.currentTimeMillis();
         startLatch.countDown();
         doneLatch.await();
+        long testEndMs = System.currentTimeMillis();
         executorService.shutdown();
 
         Product updated = productRepository.findById(runProduct.getId()).get();
-        return new int[]{successCount.get(), orderConflictCount.get(), updated.getStock()};
+
+        long elapsedMs = Math.max(testEndMs - testStartMs, 1);
+        double tps = successCount.get() * 1000.0 / elapsedMs;
+
+        // 백분위 계산 — 성공 응답 시간 정렬 후 p50(중앙값), p95(꼬리 성능) 추출
+        Collections.sort(latencies);
+        double p50Ms = 0, p95Ms = 0;
+        if (!latencies.isEmpty()) {
+            int p50Idx = latencies.size() / 2;
+            int p95Idx = Math.min((int) (latencies.size() * 0.95), latencies.size() - 1);
+            p50Ms = latencies.get(p50Idx) / 1_000_000.0;
+            p95Ms = latencies.get(p95Idx) / 1_000_000.0;
+        }
+
+        return new RunResult(successCount.get(), orderConflictCount.get(), updated.getStock(),
+                tps, p50Ms, p95Ms);
     }
 }
