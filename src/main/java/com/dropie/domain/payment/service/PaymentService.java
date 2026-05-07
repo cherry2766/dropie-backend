@@ -1,9 +1,9 @@
 package com.dropie.domain.payment.service;
 
 import com.dropie.domain.order.entity.Order;
-import com.dropie.domain.order.entity.OrderItem;
 import com.dropie.domain.order.entity.OrderStatus;
 import com.dropie.domain.order.event.OrderPaidEvent;
+import com.dropie.domain.order.event.OrderRollbackEvent;
 import com.dropie.domain.order.repository.OrderRepository;
 import com.dropie.domain.payment.client.TossPaymentClient;
 import com.dropie.domain.payment.dto.request.PaymentConfirmRequest;
@@ -11,7 +11,6 @@ import com.dropie.domain.payment.dto.response.PaymentConfirmResponse;
 import com.dropie.domain.payment.dto.response.TossConfirmResponse;
 import com.dropie.domain.payment.entity.Payment;
 import com.dropie.domain.payment.repository.PaymentRepository;
-import com.dropie.domain.product.entity.Product;
 import com.dropie.global.exception.BusinessException;
 import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.exception.custom.OrderNotFoundException;
@@ -121,8 +120,12 @@ public class PaymentService {
                     request.getAmount()
             );
         } catch (BusinessException e) {
-            // 토스 API 실패 -> 선점했던 재고 복원, 주문 취소
-            rollbackOrder(order);
+            // 토스 API 실패 → 보상 이벤트 발행 후 throw
+            // ★ 같은 트랜잭션 안에서 직접 cancel + 재고 복원하면 throw로 인한 트랜잭션 롤백에
+            //   변경이 함께 무효화됨(통합 테스트로 검증). 그래서 이벤트로 분리.
+            //   리스너는 @TransactionalEventListener(AFTER_ROLLBACK)로 외부 트랜잭션 롤백
+            //   직후 별도 트랜잭션에서 보상 작업을 수행 → 비관적 락 해제 후 동작이라 안전.
+            eventPublisher.publishEvent(new OrderRollbackEvent(order.getId()));
             throw e;
         }
         log.info("[confirmPayment] 토스 승인 API 응답 수신 - paymentKey={}, method={}, approvedAt={}",
@@ -153,25 +156,6 @@ public class PaymentService {
                 ));
 
         return PaymentConfirmResponse.of(order, payment);
-    }
-
-    /**
-     * 결제 실패 시 롤백 처리
-     *
-     * 주문 생성(POST /orders) 단계에서 재고를 이미 감소시켰으므로,
-     * 결제 실패 시 반드시 재고를 되돌려야 다음 구매자가 살 수 있음.
-     */
-    private void rollbackOrder(Order order) {
-        // 주문 취소 (PENDING → CANCELED)
-        order.cancel();
-
-        // 주문 아이템별로 선점했던 재고 복원
-        for (OrderItem item : order.getOrderItems()) {
-            Product product = item.getProduct();
-            product.increaseStock(item.getQuantity());
-        }
-
-        log.warn("[PaymentService] 결제 실패로 주문 취소 + 재고 복원 — orderId: {}", order.getId());
     }
 
     /**

@@ -2,6 +2,7 @@ package com.dropie.domain.payment.service;
 
 import com.dropie.domain.order.entity.Order;
 import com.dropie.domain.order.entity.OrderStatus;
+import com.dropie.domain.order.event.OrderRollbackEvent;
 import com.dropie.domain.order.repository.OrderRepository;
 import com.dropie.domain.payment.client.TossPaymentClient;
 import com.dropie.domain.payment.dto.request.PaymentConfirmRequest;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.LocalDateTime;
@@ -49,6 +51,11 @@ class PaymentServiceTest {
     // 기본 mock 반환값(0L)으로 안전하게 동작하므로 필드 선언만 추가하면 됨
     @Mock
     private StringRedisTemplate redisTemplate;
+
+    // OrderPaidEvent 발행(성공 케이스) + OrderRollbackEvent 발행(실패 케이스)에 필요
+    // → mock으로 두면 publishEvent 호출이 no-op으로 처리되어 NPE 방지
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private User user;
     private Order order;
@@ -117,8 +124,8 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("결제 확인 실패 — 토스 API 실패 시 주문 CANCELED, 재고 복원")
-    void 결제_확인_토스실패_주문취소() {
+    @DisplayName("결제 확인 실패 — 토스 API 실패 시 OrderRollbackEvent 발행 + 예외 전파")
+    void 결제_확인_토스실패_보상_이벤트_발행() {
         // given
         PaymentConfirmRequest request = new PaymentConfirmRequest("payKey123", 5500);
 
@@ -126,14 +133,16 @@ class PaymentServiceTest {
         given(tossPaymentClient.confirm(any(), any(), any(Integer.class)))
                 .willThrow(new BusinessException(ErrorCode.PAYMENT_FAILED));
 
-        // when & then
+        // when & then: 예외가 호출자에게 전파되어야 함
         assertThatThrownBy(() -> paymentService.confirmPayment("test@email.com", 1L, request))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PAYMENT_FAILED);
 
-        // 토스 실패 후 롤백 — 주문이 CANCELED 상태여야 함
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        // 보상 이벤트 발행 검증 — 실제 cancel/재고 복원은 OrderRollbackEventListener가 담당
+        // (단위 테스트 환경엔 리스너가 동작하지 않으므로 in-memory order 상태는 PENDING 그대로)
+        // 실제 보상 흐름은 PaymentRollbackTest 통합 테스트에서 검증
+        then(eventPublisher).should().publishEvent(any(OrderRollbackEvent.class));
     }
 
     @Test
