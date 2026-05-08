@@ -8,6 +8,7 @@ import com.dropie.global.exception.ErrorCode;
 import com.dropie.global.exception.custom.OutOfStockException;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,7 +56,11 @@ public class Product extends BaseEntity {
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
 
+    // @BatchSize: productTags lazy 로딩 시 IN 절로 묶어서 한 번에 조회 → N+1 방지
+    // → multiple bag fetch (Order.orderItems + Product.productTags 동시 fetch join 불가)
+    //   문제를 피하려고 productTags는 별도 lazy로 두고, BatchSize로 효율 보강
     @OneToMany(mappedBy = "product")
+    @BatchSize(size = 100)
     @Builder.Default
     private List<ProductTag> productTags = new ArrayList<>();
 

@@ -22,8 +22,10 @@ import java.util.stream.Collectors;
 // 흐름:
 //   1) AFTER_COMMIT — 실제로 PAID 커밋된 후에만 동작 (롤백된 주문엔 누적 X)
 //   2) @Async      — 결제 응답 속도에 영향 없음
-//   3) fetch join  — 별도 스레드라 호출부 영속성 컨텍스트가 없음 → lazy 로딩 불가
-//                    → findByIdWithItemsAndTags로 한 번에 가져옴
+//   3) REQUIRES_NEW 트랜잭션 안에서 동작 → lazy 컬렉션(productTags) 접근 가능
+//      → Order/OrderItems/Product까지 fetch join, productTags는 @BatchSize로 IN 절 일괄 로딩
+//        (Order.orderItems + Product.productTags 두 List를 동시 fetch join하면
+//         MultipleBagFetchException 발생하므로 productTags는 lazy로 분리)
 //   4) tagId 추출  → TasteTagService.addTagScores 위임
 @Slf4j
 @Component
@@ -41,7 +43,7 @@ public class TasteTagAccumulator {
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public void onOrderPaid(OrderPaidEvent event) {
         try {
-            Order order = orderRepository.findByIdWithItemsAndTags(event.orderId())
+            Order order = orderRepository.findByIdWithItemsForTagAccumulation(event.orderId())
                     .orElse(null);
             if (order == null) {
                 log.warn("[TasteTagAccumulator] order 없음 - orderId={}", event.orderId());

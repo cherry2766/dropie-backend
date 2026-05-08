@@ -61,16 +61,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             """)
     long countByOrderedProductId(@Param("productId") Long productId);
 
-    // OrderItems → Product → ProductTags → Tag 한 번에 fetch (N+1 방지)
+    // 결제 완료 후 취향 태그 누적용 — Order + OrderItems + Product까지만 fetch
+    // → productTags + tag는 동시 fetch 시 MultipleBagFetchException 발생 (List 두 개 동시 fetch 금지)
+    // → Product.productTags에 @BatchSize 적용해 lazy 접근 시 IN 절로 일괄 로딩 → N+1 방지
     @Query("""
             SELECT DISTINCT o FROM Order o
             JOIN FETCH o.orderItems oi
-            JOIN FETCH oi.product p 
-            LEFT JOIN FETCH p.productTags pt
-            LEFT JOIN FETCH pt.tag
+            JOIN FETCH oi.product p
             WHERE o.id = :orderId
             """)
-    Optional<Order> findByIdWithItemsAndTags(@Param("orderId") Long orderId);
+    Optional<Order> findByIdWithItemsForTagAccumulation(@Param("orderId") Long orderId);
 
     // 사용자의 PAID 상태 주문 전체에서 ProductTag.tagId 만 추출
     @Query("""
