@@ -5,6 +5,7 @@ import com.dropie.global.security.JwtAuthenticationFilter;
 import com.dropie.global.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -31,6 +33,9 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
+
+    @Value("${app-cors.allowed-origins}")
+    private String allowedOrigins;
 
     // AuthenticationManager : 실제 인증(아이디/비밀번호 검증)을 수행하는 객체
     // AuthService에서 로그인 처리할 때 사용
@@ -60,6 +65,7 @@ public class SecurityConfig {
                         ).permitAll()   // Swagger API 문서 — 비로그인 상태로도 접근 가능해야 문서 페이지가 정상적으로 뜸
                         .requestMatchers(HttpMethod.GET, "/events/**").permitAll() // 이벤트, 상품 조회 접근 가능
                         .requestMatchers("/ws-stomp/**").permitAll() // WebSocket 핸드셰이크 (재고 broadcast는 공개 정보)
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN") // 관리자만 접근 가능
                         .anyRequest().authenticated())         // 나머지는 로그인 필요
                 // 5. 미인증 요청 시 401 반환
@@ -91,7 +97,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));  // 프론트 개발 서버
+        // 환경변수(app-cors.allowed-origins)에서 콤마로 구분된 출처 목록 파싱
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         // Authorization 헤더(JWT 토큰)를 프론트에서 읽을 수 있도록 허용

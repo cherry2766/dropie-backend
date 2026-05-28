@@ -1,0 +1,16 @@
+# 운영용 설정 (EC2에서 SPRING_PROFILES_ACTIVE=prod 로 띄우면 자동 로드됨)
+
+spring:
+  jpa:
+    hibernate:
+      # 첫 배포만 'update'로 한 번 띄워서 RDS에 테이블 자동 생성
+      # 성공 확인 후 'validate'로 변경 + 재배포 (스키마 안전성)
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false   # OSIV off → DB 커넥션 점유 시간 단축 (실무 권장)
+
+logging:
+  level:
+    root: INFO
+    com.dropie: INFO
+    org.hibernate.SQL: WARN
