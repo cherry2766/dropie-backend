@@ -36,6 +36,14 @@ out/
 ### VS Code ###
 .vscode/
 
+# Environment variables
 .env
-application.yml
-application-local.yml
+.env.local
+.env.*.local
+!.env.example
+
+.claude/
+CLAUDE.md
+AGENTS.md
+docs/*
+!docs/concurrency-test-result.md

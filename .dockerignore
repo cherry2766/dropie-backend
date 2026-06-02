@@ -1,0 +1,16 @@
+.gradle
+build
+out
+.idea
+*.iml
+.git
+.github
+logs
+*.log
+.env
+.env.*
+README.md
+HELP.md
+CLAUDE.md
+docs
+src/test

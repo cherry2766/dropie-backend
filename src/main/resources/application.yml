@@ -1,0 +1,102 @@
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+    groups-order: asc
+
+spring:
+  application:
+    name: dropie
+
+  # 활성 프로파일 환경변수로 지정 (기본: local)
+  # EC2에선 SPRING_PROFILES_ACTIVE=prod 로 띄움
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+  # DB 접속 정보를 환경변수로 분리
+  # 로컬: 환경변수 없으면 기본값(localhost:3307/dropie) 사용
+  # 운영: DB_HOST=<RDS 엔드포인트>, DB_PORT=3306 주입
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:dropie}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+
+  jpa:
+    # ddl-auto, show-sql 등은 프로파일별 파일(application-local.yml / application-prod.yml)에서 관리
+
+  # Redis 접속 정보도 환경변수로
+  # 로컬: 기본값 localhost
+  # 운영(EC2 docker-compose): REDIS_HOST=redis (compose 서비스명)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 1800000
+
+app:
+  lock:
+    type: redis
+
+server:
+  port: 8080
+
+# Actuator: 헬스체크 + 메트릭 노출 (배포 검증, 모니터링용)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+cloud:
+  aws:
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
+    s3:
+      bucket: ${AWS_S3_BUCKET:dropie-bucket-s3}
+    region:
+      static: ${AWS_S3_REGION:ap-northeast-2}
+
+admin:
+  email: ${ADMIN_EMAIL}
+  password: ${ADMIN_PASSWORD}
+  nickname: ${ADMIN_NICKNAME}
+
+toss:
+  payments:
+    secret-key: ${TOSS_SECRET_KEY}
+    client-key: ${TOSS_CLIENT_KEY}
+
+claude:
+  api:
+    key: ${CLAUDE_API_KEY}
+    base-url: ${CLAUDE_BASE_URL:https://api.anthropic.com}
+    model: ${CLAUDE_MODEL:claude-haiku-4-5-20251001}
+    timeout-ms: 5000
+    max-tokens: 1000
+
+# CORS 허용 출처 (SecurityConfig에서 @Value로 읽음 — 선행 4에서 적용)
+# 로컬: http://localhost:5173
+# 운영: https://<프론트 도메인>
+app-cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}

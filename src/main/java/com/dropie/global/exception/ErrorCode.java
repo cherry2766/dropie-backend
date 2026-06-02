@@ -1,0 +1,90 @@
+package com.dropie.global.exception;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+
+@Getter
+@RequiredArgsConstructor
+public enum ErrorCode {
+
+    // 공통
+    INVALID_INPUT(HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),                       // 400 - @Valid 검사 실패 시 사용, 필드 단위 오류는 ErrorResponse에서 별도 처리
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),    // 401 - 어떤 항목이 틀렸는지 노출하지 않기 위해 메시지를 하나로 통일
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),                            // 401 - 토큰 자체가 없을 때, INVALID_CREDENTIALS와 구분
+    FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),                                 // 403 - 토큰은 있지만 권한이 없을 때
+
+    // JWT
+    INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),                      // 401 - 서명 불일치, 형식 오류 등
+    EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다."),                             // 401 - INVALID_TOKEN과 구분해서 클라이언트가 재발급 요청 여부 판단 가능
+
+    // 유저
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다."),                       // 404
+    DUPLICATE_EMAIL(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),                      // 409 - 회원가입 시 이메일 중복
+    DUPLICATE_NICKNAME(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),                   // 409 - 닉네임 중복
+    ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "탈퇴한 계정입니다."),                        // 401 - 소프트 딜리트된 유저가 로그인 시도 시, 로그인 차단
+    RECENTLY_WITHDRAWN_EMAIL(HttpStatus.CONFLICT, "최근 탈퇴한 계정입니다. 30일 후 재가입 가능합니다."), // 409 - 최근 탈퇴한 이메일 — 30일 유예 후 재가입 가능, 회원가입 차단
+
+    // 이벤트
+    EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 이벤트입니다."),                      // 404
+    EVENT_NOT_STARTED(HttpStatus.BAD_REQUEST, "아직 판매 시작 전입니다."),                    // 400 - 시작 전/종료 후를 구분해서 클라이언트가 다르게 대응할 수 있게 분리
+    EVENT_ENDED(HttpStatus.BAD_REQUEST, "판매가 종료되었습니다."),                            // 400 - 위와 동일한 이유로 NOT_STARTED와 별도 코드 사용
+    INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, "유효하지 않은 상태 전환입니다."),       // 400 - 허용되지 않는 상태 변경 시도
+
+    // 상품
+    PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 상품입니다."),                      // 404
+    OUT_OF_STOCK(HttpStatus.CONFLICT, "재고가 부족합니다."),                                  // 409 - 재고 부족은 입력값 문제가 아닌 서버 상태 충돌이므로 400 대신 409 사용
+    INVALID_QUANTITY(HttpStatus.BAD_REQUEST, "잘못된 수량 요청입니다."),                      // 400 - 수량 자체가 0 이하로 잘못된 입력값이므로 400 사용 (OUT_OF_STOCK과 구분)
+    EVENT_SOLD_OUT(HttpStatus.BAD_REQUEST, "이미 모두 판매되었습니다."),
+
+    // 주문
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 주문입니다."),                       // 404
+    ORDER_TIME_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "주문 가능한 시간이 아닙니다."),           // 400 - 이벤트 오픈 시간 외 주문 시도
+    CANCEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "취소할 수 없는 주문 상태입니다."),            // 400 - CANCELED/COMPLETED 상태일 때만 발생, 상태 검증은 Order.cancel()에서 처리
+    DUPLICATE_ORDER_ITEM(HttpStatus.BAD_REQUEST, "동일한 상품을 중복 요청할 수 없습니다."),  // 400 - 같은 productId가 items에 두 번 이상 포함된 경우
+
+    // 태그
+    TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 태그입니다."),                         // 404
+    PREFERENCE_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 취향 태그가 등록되어 있습니다."),
+
+    // 배송지
+    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 배송지입니다."),                   // 404
+
+    // 동시성 제어
+    // 503: 락 획득 실패는 입력값 문제가 아니라 서버 부하 상황이므로 SERVICE_UNAVAILABLE 사용
+    //      클라이언트가 "잠시 후 재시도"하도록 유도
+    LOCK_ACQUISITION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "현재 요청이 많습니다. 잠시 후 다시 시도해주세요."),
+
+    // 409: 낙관적 락 재시도 3회 소진 — 재고는 있지만 경쟁에서 계속 밀린 상황
+    ORDER_CONFLICT(HttpStatus.CONFLICT, "주문 처리 중 문제가 발생했습니다. 다시 시도해주세요."),
+
+    // Rate Limit
+    // 429: 짧은 시간 내 과도한 요청 — 서버 부하 방지, 클라이언트가 잠시 후 재시도하도록 유도
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
+
+    // S3
+    S3_UPLOAD_URL_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드 URL 생성에 실패했습니다."),
+
+    LOGIN_BLOCKED(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도해주세요."),
+
+    // 이메일 인증
+    INVALID_VERIFICATION_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 인증 링크입니다."),
+
+    // 이메일 인증을 완료하지 않으면 로그인 자체를 막아 "인증 = 가입 완료" 흐름을 강제
+    EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요."),
+
+    // 비밀번호 재설정
+    // 토큰이 없거나(만료 포함) 유효하지 않을 때 동일한 에러로 처리
+    // → 만료 vs 위조를 구분하면 공격자에게 힌트가 될 수 있으므로 하나로 통일
+    PASSWORD_RESET_TOKEN_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 링크입니다."),
+
+    // 결제
+    PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "결제 처리 중 오류가 발생했습니다."),
+    PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "결제 금액이 주문 금액과 일치하지 않습니다."),
+    ORDER_NOT_PENDING(HttpStatus.BAD_REQUEST, "결제 대기 상태의 주문만 결제할 수 있습니다."),
+    PAYMENT_ALREADY_PROCESSED(HttpStatus.CONFLICT, "이미 처리된 결제입니다."),
+    ORDER_ACCESS_DENIED(HttpStatus.FORBIDDEN, "해당 주문에 접근할 권한이 없습니다.");
+
+    private final HttpStatus status;
+    private final String message;
+}

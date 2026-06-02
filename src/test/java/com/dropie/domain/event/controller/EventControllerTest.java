@@ -1,0 +1,234 @@
+package com.dropie.domain.event.controller;
+
+import com.dropie.domain.event.dto.response.EventDetailResponse;
+import com.dropie.domain.event.dto.response.EventListResponse;
+import com.dropie.domain.event.dto.response.LineupRoundResponse;
+import com.dropie.domain.event.entity.EventStatus;
+import com.dropie.domain.event.service.EventService;
+import com.dropie.domain.product.dto.response.ProductResponse;
+import com.dropie.global.common.PageResponse;
+import com.dropie.global.config.SecurityConfig;
+import com.dropie.global.exception.BusinessException;
+import com.dropie.global.exception.ErrorCode;
+import com.dropie.global.security.CustomUserDetailsService;
+import com.dropie.global.security.JwtTokenProvider;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(EventController.class)  // EventController만 슬라이스 로드
+@Import(SecurityConfig.class)       // Security 설정 적용
+class EventControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private EventService eventService;
+
+    @MockitoBean
+    private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+
+    // WebMvcConfig → RateLimitInterceptor → StringRedisTemplate 의존성 체인
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
+
+    @BeforeEach
+    void setUp() {
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(anyString())).willReturn(null);
+    }
+
+    @Test
+    @DisplayName("GET /events - 성공 시 200과 이벤트 목록 반환")
+    void 이벤트_목록_조회_성공() throws Exception {
+        // given
+        // 컨트롤러는 서비스 결과를 그대로 반환하므로 서비스 반환값만 세팅
+        PageResponse<EventListResponse> response = PageResponse.<EventListResponse>builder()
+                .content(List.of(
+                        EventListResponse.builder()
+                                .id(1L)
+                                .brandName("노티드")
+                                .status(EventStatus.OPEN)
+                                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
+                                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                                .build()
+                ))
+                .page(1)
+                .size(6)
+                .totalElements(1)
+                .totalPages(1)
+                .build();
+
+        // status 파라미터 없으면 null로 전달됨
+        given(eventService.getEvents(1, 6, null)).willReturn(response);
+
+        // when & then
+        mockMvc.perform(get("/events")
+                        .param("page", "1")
+                        .param("size", "6"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(1L))
+                .andExpect(jsonPath("$.content[0].brandName").value("노티드"))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /events?status=OPEN - 상태 필터 파라미터 전달 시 서비스에 OPEN이 넘어가고 필터된 결과 반환")
+    void 이벤트_목록_상태_필터_조회_성공() throws Exception {
+        // given
+        PageResponse<EventListResponse> response = PageResponse.<EventListResponse>builder()
+                .content(List.of(
+                        EventListResponse.builder()
+                                .id(1L)
+                                .brandName("노티드")
+                                .status(EventStatus.OPEN)
+                                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
+                                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                                .build()
+                ))
+                .page(1).size(6).totalElements(1).totalPages(1)
+                .build();
+
+        given(eventService.getEvents(1, 6, EventStatus.OPEN)).willReturn(response);
+
+        // when & then
+        mockMvc.perform(get("/events")
+                        .param("page", "1")
+                        .param("size", "6")
+                        .param("status", "OPEN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("OPEN"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /events?status=INVALID - 존재하지 않는 상태값 입력 시 400 반환")
+    void 이벤트_목록_잘못된_상태값_400() throws Exception {
+        // EventStatus enum에 없는 값이면 Spring이 변환 실패로 자동 400 반환
+        mockMvc.perform(get("/events")
+                        .param("status", "INVALID"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("GET /events/{eventId} - 성공 시 200과 이벤트 상세 반환")
+    void 이벤트_상세_조회_성공() throws Exception {
+        // given
+        PageResponse<ProductResponse> products = PageResponse.<ProductResponse>builder()
+                .content(List.of(
+                        ProductResponse.builder()
+                                .id(1L)
+                                .name("초코두바이도넛")
+                                .description("상품 설명")
+                                .price(5500)
+                                .stock(30)
+                                .build()
+                ))
+                .page(1)
+                .size(5)
+                .totalElements(1)
+                .totalPages(1)
+                .build();
+
+        EventDetailResponse response = EventDetailResponse.builder()
+                .id(1L)
+                .brandName("노티드")
+                .description("브랜드 설명")
+                .status(EventStatus.OPEN)
+                .startAt(LocalDateTime.of(2026, 4, 1, 20, 0))
+                .endAt(LocalDateTime.of(2026, 4, 1, 22, 0))
+                .products(products)
+                .build();
+
+        given(eventService.getEventDetail(1L, 1, 5)).willReturn(response);
+
+        // when & then
+        mockMvc.perform(get("/events/1")
+                        .param("page", "1")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1L))
+                .andExpect(jsonPath("$.brandName").value("노티드"))
+                .andExpect(jsonPath("$.products.content[0].name").value("초코두바이도넛"))
+                .andExpect(jsonPath("$.products.content[0].description").value("상품 설명"));
+    }
+
+    @Test
+    @DisplayName("GET /events/{eventId} - 없는 이벤트 404")
+    void 이벤트_상세_조회_없는이벤트() throws Exception {
+        // given
+        given(eventService.getEventDetail(eq(999L), anyInt(), anyInt()))
+                .willThrow(new BusinessException(ErrorCode.EVENT_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/events/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("EVENT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("GET /events/lineup - 성공 시 200과 차수별 브랜드 목록 반환")
+    void 라인업_조회_성공() throws Exception {
+        // given
+        List<LineupRoundResponse> responses = List.of(
+                LineupRoundResponse.builder().round(1).status("FINISHED")
+                        .brands(List.of("솔트버터", "노아케이크")).build(),
+                LineupRoundResponse.builder().round(2).status("OPEN")
+                        .brands(List.of("밀담제과", "도넛클럽")).build(),
+                LineupRoundResponse.builder().round(3).status("UPCOMING")
+                        .brands(List.of("마들렌홈", "흑임자당")).build()
+        );
+
+        given(eventService.getLineup()).willReturn(responses);
+
+        // when & then
+        // /events/** 는 SecurityConfig에서 permitAll → 인증 없이 접근 가능
+        mockMvc.perform(get("/events/lineup"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].round").value(1))
+                .andExpect(jsonPath("$[0].status").value("FINISHED"))
+                .andExpect(jsonPath("$[0].brands[0]").value("솔트버터"))
+                .andExpect(jsonPath("$[1].round").value(2))
+                .andExpect(jsonPath("$[1].status").value("OPEN"))
+                .andExpect(jsonPath("$[2].round").value(3))
+                .andExpect(jsonPath("$[2].status").value("UPCOMING"));
+    }
+
+    @Test
+    @DisplayName("GET /events/lineup - 이벤트 없으면 빈 배열 반환")
+    void 라인업_조회_빈목록() throws Exception {
+        // given
+        given(eventService.getLineup()).willReturn(List.of());
+
+        // when & then
+        mockMvc.perform(get("/events/lineup"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+}

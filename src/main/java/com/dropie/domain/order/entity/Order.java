@@ -1,0 +1,113 @@
+package com.dropie.domain.order.entity;
+
+import com.dropie.domain.user.entity.User;
+import com.dropie.global.common.BaseEntity;
+import com.dropie.global.exception.BusinessException;
+import com.dropie.global.exception.ErrorCode;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Table(name = "orders")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Builder
+public class Order extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(nullable = false, unique = true)
+    private String orderNumber;
+
+    @Column(nullable = false)
+    private String receiverName;
+
+    @Column(nullable = false)
+    private String phone;
+
+    @Column(nullable = false)
+    private String zipcode;
+
+    @Column(nullable = false)
+    private String address1;
+
+    private String address2;
+
+    @Column(nullable = false)
+    private int totalPrice;
+
+    private String deliveryMemo;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderStatus status = OrderStatus.PENDING;
+
+    // CascadeType.ALL: Order 저장 시 OrderItem도 함께 저장/삭제됨
+    // orphanRemoval: Order에서 제거된 OrderItem은 DB에서도 삭제됨
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default // @Builder와 함께 쓸 때 초기값 유지하려면 필요
+    private List<OrderItem> orderItems = new ArrayList<>();
+
+    // 주문 취소 — 취소 불가 상태면 CANCEL_NOT_ALLOWED 예외
+    // 상태 검증을 Service가 아닌 Entity에서 처리 (도메인 로직을 한 곳에 모음)
+    public void cancel() {
+        if(!this.status.canCancel()) {
+            throw new BusinessException(ErrorCode.CANCEL_NOT_ALLOWED);
+        }
+        this.status = OrderStatus.CANCELED;
+    }
+
+    // 주문 상품 추가 — OrderItem을 컬렉션에 추가
+    // CascadeType.ALL이 있으므로 Order 저장 시 함께 INSERT됨
+    public void addOrderItem(OrderItem item) {
+        this.orderItems.add(item);
+    }
+
+    // 최종 총 금액 반영 — 주문 상품 루프가 끝난 후 계산된 금액을 덮어씀
+    public void updateTotalPrice(int totalPrice) {
+        this.totalPrice = totalPrice;
+    }
+
+    /**
+     * 결제 완료 처리 — PENDING → PAID
+     * <p>
+     * PENDING 상태가 아닌 주문에 confirm을 시도하면 예외를 던짐
+     * 이미 PAID거나 CANCELED된 주문은 다시 결제 처리할 수 없음
+     */
+    public void confirm() {
+        if (this.status != OrderStatus.PENDING) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_PENDING);
+        }
+        this.status = OrderStatus.PAID;
+    }
+
+    /**
+     * 대표 브랜드명 반환 (목록 응답용)
+     * <p>
+     * - 첫 번째 OrderItem의 상품이 속한 이벤트의 brandName
+     * - 주문에 item이 없는 이상 케이스(이론상 발생 안 함)에는 null 반환
+     * <p>
+     * 한 주문에 여러 브랜드 상품이 섞인 경우에도 대표값 1개만 반환.
+     * 프론트에서 "외 N개" 표시가 필요하면 별도 brandCount 필드를 추가하는 방향으로 확장 가능.
+     */
+    public String getRepresentativeBrandName() {
+        if (orderItems == null || orderItems.isEmpty()) {
+            return null;
+        }
+        return orderItems.get(0)
+                .getProduct()
+                .getEvent()
+                .getBrandName();
+    }
+}
