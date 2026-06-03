@@ -98,3 +98,12 @@ claude:
     model: claude-haiku-4-5-20251001
     timeout-ms: 5000
     max-tokens: 1000
+
+# 테스트용 더미 — CORS 빈 생성에만 필요, 실제 요청엔 영향 없음
+app-cors:
+  allowed-origins: http://localhost:5173
+
+management:
+  health:
+    mail:
+      enabled: false
