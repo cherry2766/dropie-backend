@@ -9,6 +9,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest          # 깃허브가 빌려주는 리눅스 러너
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4    # 러너에 레포 코드 가져옴
