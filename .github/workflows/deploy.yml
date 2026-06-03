@@ -38,26 +38,38 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write     # OIDC 토큰 발급에 필요
+      contents: read
     steps:
-      - name: EC2 SSH 배포
-        uses: appleboy/ssh-action@v1.2.4
+      - name: AWS 인증 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
-          command_timeout: 20m
-          script: |
-            cd /home/ubuntu/dropie-backend
-            git fetch origin main
-            git checkout -B main origin/main
-            git reset --hard origin/main
-            docker compose up -d --build
-            echo "기동 대기 + 헬스체크..."
-            for i in $(seq 1 12); do
-              if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
-                echo "배포 성공: UP"; exit 0
-              fi
-              echo "대기 중... ($i/12)"; sleep 10
-            done
-            echo "헬스체크 실패"; exit 1
+          role-to-assume: arn:aws:iam::224084343114:role/dropie-github-actions-role
+          aws-region: ap-northeast-2
+
+      - name: SSM으로 EC2 배포
+        env:
+          INSTANCE_ID: i-07865cd328c811c65
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "GitHub Actions deploy" \
+            --parameters 'commands=["sudo -u ubuntu bash /home/ubuntu/deploy.sh"]' \
+            --query "Command.CommandId" --output text)
+          echo "Command ID: $CMD_ID"
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query "Status" --output text 2>/dev/null || echo "Pending")
+            echo "[$i] $STATUS"
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut) break ;;
+            esac
+            sleep 10
+          done
+          echo "===== 배포 로그 ====="
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text
+          echo "===== 에러 ====="
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query "StandardErrorContent" --output text
+          [ "$STATUS" = "Success" ] || exit 1
