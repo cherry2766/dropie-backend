@@ -1,0 +1,11 @@
+# 그라파나가 부팅 때 자동으로 읽는 데이터소스 정의 (수동 추가 불필요)
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB            # 대시보드 2587이 참조하는 이름과 같아야 함
+    type: influxdb
+    access: proxy            # 그라파나 서버가 대신 호출 → 브라우저에서 8086 직접 안 봐도 됨
+    url: http://influxdb:8086 # 같은 compose 네트워크 안이라 서비스명으로 접근
+    database: k6             # k6 --out influxdb 가 쓰는 DB 이름
+    isDefault: true
+    uid: influxdb-k6
