@@ -1,0 +1,52 @@
+# 부하측정 전용 프로파일 (SPRING_PROFILES_ACTIVE=loadtest 로 활성화)
+# 측정 대상은 "주문/재고" 경로뿐 → 외부 연동은 더미값으로 부팅만 시킴
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update      # 부하용 DB 스키마 자동 생성
+    show-sql: false         # 쿼리 로그 OFF (켜면 처리량 떨어져 측정이 오염됨)
+    open-in-view: false     # 커넥션을 컨트롤러까지 안 들고 있음 → 점유시간 단축
+  datasource:
+    hikari:
+      maximum-pool-size: ${HIKARI_POOL_SIZE:50}   # ← DB풀 튜닝 손잡이
+  mail:
+    username: dummy
+    password: dummy
+
+app:
+  lock:
+    type: ${APP_LOCK_TYPE:redis}   # ← 분산락(redis) ↔ 낙관적락(optimistic) 전환 손잡이
+
+# 측정에 안 쓰는 값들 — 앱이 뜨기만 하면 됨 (더미)
+jwt:
+  secret: dropie-loadtest-secret-key-32bytes-minimum-please
+  expiration: 864000000    # 240h (측정 중 토큰 만료 방지)
+admin:                     # DataInitializer가 부팅 때 읽음 → 필수
+  email: admin@loadtest.local
+  password: admin1234!
+  nickname: loadadmin
+toss:
+  payments:
+    secret-key: dummy
+    client-key: dummy
+    mock-mode: true
+claude:
+  api:
+    key: dummy
+cloud:
+  aws:
+    credentials:
+      access-key: dummy
+      secret-key: dummy
+
+logging:
+  level:
+    root: WARN
+    com.dropie: INFO       # 주문 진입 로그 정도만
+    org.hibernate.SQL: WARN
+
+management:
+  health:
+    mail:
+      enabled: false       # 메일 헬스체크 OFF (측정 중 불필요)

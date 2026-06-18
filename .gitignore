@@ -47,3 +47,6 @@ CLAUDE.md
 AGENTS.md
 docs/*
 !docs/concurrency-test-result.md
+
+# 부하테스트 결과 로그 (k6 콘솔 출력 — 산출물)
+loadtest/results/
