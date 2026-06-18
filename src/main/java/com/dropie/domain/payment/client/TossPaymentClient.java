@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.Map;
 
@@ -22,10 +23,13 @@ public class TossPaymentClient {
     @Value("${toss.payments.secret-key}")
     private String secretKey;
 
+    @Value("${toss.payments.mock-mode:false}")
+    private boolean mockMode;
+
     private static final String TOSS_CONFIRM_URL = "https://api.tosspayments.com/v1/payments/confirm";
 
     /**
-     * 토스페이먼츠 결제 승인 API를 호출한다.
+     * 토스페이먼츠 결제 승인 API 호출
      * <p>
      * 인증 방식: HTTP Basic Auth
      * - 토스는 secretKey 뒤에 ':'를 붙이고 Base64로 인코딩한 값을 Authorization 헤더에 넣음
@@ -36,6 +40,18 @@ public class TossPaymentClient {
      * @param amount     결제 금액 (주문 금액과 일치해야 함)
      */
     public TossConfirmResponse confirm(String paymentKey, String orderId, int amount) {
+        // 부하측정용 mock — 실제 토스 호출 없이 승인 응답 생성
+        if (mockMode) {
+            log.info("[TossPaymentClient] MOCK 승인 - paymentKey={}, orderId={}, amount={}", paymentKey, orderId, amount);
+            return TossConfirmResponse.builder()
+                    .paymentKey(paymentKey)
+                    .orderId(orderId)
+                    .totalAmount(amount)
+                    .method("MOCK")
+                    .approvedAt(OffsetDateTime.now().toString())  // ISO 8601 → parseApprovedAt 통과
+                    .status("DONE")
+                    .build();
+        }
         // secretKey 뒤에 ':' 붙이고 Base64 인코딩 — 토스 인증 규격
         String encodedKey = Base64.getEncoder()
                 .encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
