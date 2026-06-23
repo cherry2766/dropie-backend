@@ -36,6 +36,11 @@ public class PasswordResetService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
+    // 재설정 메일 링크가 가리킬 프론트엔드 베이스 URL
+    // → 로컬은 http://localhost:5173, 운영은 환경변수(APP_FRONTEND_URL)로 주입
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
     // Redis 키 형식: pwd_reset:{UUID토큰} → 이메일
     // EmailVerificationService의 "email_verify:" 와 구분하기 위해 별도 prefix 사용
     private static final String KEY_PREFIX = "pwd_reset:";
@@ -74,7 +79,7 @@ public class PasswordResetService {
             // 링크를 백엔드가 아닌 프론트 URL로 직접 연결하는 이유:
             // → 이메일 인증과 달리 비밀번호 재설정은 백엔드에서 리다이렉트할 이유가 없음
             // → 프론트가 URL의 token 파라미터를 꺼내서 confirm API를 직접 호출하는 구조가 더 깔끔함
-            String resetUrl = "http://localhost:5173/reset-password?token=" + token;
+            String resetUrl = frontendUrl + "/reset-password?token=" + token;
 
             // HTML 본문은 Thymeleaf 템플릿(templates/email/password-reset.html)에서 렌더링
             String htmlContent = emailTemplateService.render(

@@ -53,6 +53,12 @@ jwt:
 app:
   lock:
     type: redis
+  # 인증 메일 링크/리다이렉트에 쓰는 베이스 URL
+  # base-url: 메일 인증 링크의 백엔드 주소 (사용자가 클릭 → /auth/verify-email 호출)
+  # frontend-url: 인증 처리 후 이동할 프론트 주소 (/signup-complete)
+  # 기본값(: 뒤)은 로컬 개발용이라 로컬에선 코드 수정 없이 그대로 동작, 운영은 환경변수로 주입
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
 
 server:
   port: 8080

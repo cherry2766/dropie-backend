@@ -59,6 +59,9 @@ cloud:
 app:
   lock:
     type: redis
+  # 테스트용 더미 — 인증 메일 링크/리다이렉트 URL @Value 주입에만 필요 (실제 메일 발송 없음)
+  base-url: http://localhost:8080
+  frontend-url: http://localhost:5173
 
 server:
   port: 8080
