@@ -56,6 +56,8 @@ class EmailVerificationServiceTest {
         // @Value("${spring.mail.username}")는 Spring 컨텍스트 없이 주입되지 않음
         // → ReflectionTestUtils로 private 필드에 직접 값을 주입해서 NullPointerException 방지
         ReflectionTestUtils.setField(emailVerificationService, "fromEmail", "test@test.com");
+        // @Value("${app.base-url}")도 동일하게 컨텍스트 없이 주입 안 되므로 직접 주입
+        ReflectionTestUtils.setField(emailVerificationService, "baseUrl", "http://localhost:8080");
 
         // opsForValue(), createMimeMessage() stub은 테스트마다 필요 여부가 달라서 각 테스트에 직접 선언
         // → setUp()에 두면 일부 테스트에서 사용 안 해 UnnecessaryStubbingException 발생

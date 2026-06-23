@@ -48,6 +48,8 @@ class PasswordResetServiceTest {
         // @Value로 주입되는 fromEmail은 Spring 컨텍스트 없이 주입 안 됨
         // → ReflectionTestUtils로 private 필드에 직접 값 주입
         ReflectionTestUtils.setField(passwordResetService, "fromEmail", "test@test.com");
+        // @Value("${app.frontend-url}")도 컨텍스트 없이 주입 안 되므로 직접 주입
+        ReflectionTestUtils.setField(passwordResetService, "frontendUrl", "http://localhost:5173");
     }
 
     // ===================== requestPasswordReset =====================

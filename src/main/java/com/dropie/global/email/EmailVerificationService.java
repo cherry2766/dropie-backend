@@ -31,6 +31,11 @@ public class EmailVerificationService {
     // → Gmail 발신 계정 주소 (환경변수로 관리됨)
     @Value("${spring.mail.username}")
     private String fromEmail;
+    // 인증 메일 링크의 백엔드 베이스 URL
+    // → 로컬은 http://localhost:8080, 운영은 환경변수(APP_BASE_URL)로 주입
+    // → 하드코딩하면 배포 환경마다 코드를 고쳐야 하므로 외부 설정으로 분리
+    @Value("${app.base-url}")
+    private String baseUrl;
     // Redis 키 형식: email_verify:{UUID토큰}
     private static final String KEY_PREFIX = "email_verify:";
     // 인증 링크 유효 시간: 30분
@@ -64,7 +69,7 @@ public class EmailVerificationService {
             helper.setSubject("[Dropie] 이메일 인증을 완료해주세요");
             // 인증 링크는 백엔드를 거쳐 프론트로 리다이렉트되는 구조
             // → 백엔드에서 토큰 검증 + emailVerified=true 업데이트 후 프론트 완료 페이지로 이동
-            String verifyUrl = "http://localhost:8080/auth/verify-email?token=" + token;
+            String verifyUrl = baseUrl + "/auth/verify-email?token=" + token;
 
             // HTML 본문은 Thymeleaf 템플릿(templates/email/email-verification.html)에서 렌더링
             // → 서비스 코드에서 HTML 문자열을 직접 다루지 않아 디자인/문구 수정이 용이

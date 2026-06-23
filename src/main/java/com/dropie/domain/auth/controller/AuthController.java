@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -30,6 +31,11 @@ public class AuthController {
 
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
+
+    // 이메일 인증 후 이동할 프론트엔드 베이스 URL
+    // → 로컬은 http://localhost:5173, 운영은 환경변수(APP_FRONTEND_URL)로 주입
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     // 회원가입 API
     // → HttpServletResponse 파라미터 제거: 쿠키 설정이 필요 없기 때문
@@ -90,10 +96,10 @@ public class AuthController {
         try {
             authService.verifyEmail(token);
             // 인증 성공 → 프론트 완료 페이지로 이동
-            response.sendRedirect("http://localhost:5173/signup-complete?success=true");
+            response.sendRedirect(frontendUrl + "/signup-complete?success=true");
         } catch (BusinessException e) {
             // 인증 실패 (토큰 만료 or 잘못된 토큰) → 실패 화면으로 이동
-            response.sendRedirect("http://localhost:5173/signup-complete?success=false");
+            response.sendRedirect(frontendUrl + "/signup-complete?success=false");
         }
     }
 
