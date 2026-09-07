@@ -21,9 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -51,13 +53,14 @@ public class EventService {
                 ? eventRepository.findByStatus(status, pageable)
                 : eventRepository.findAll(pageable);
 
-        // 한 번의 쿼리로 모든 이벤트의 "재고 있음 여부"를 조회 (N+1 방지)
-        // 간단한 구현: 페이지 사이즈가 작으니 이벤트별로 existsByEventAndStockGreaterThan 호출해도 됨
-        // 더 정교하게 하려면 GROUP BY로 한 번에 가져오는 쿼리 추가
-        Page<EventListResponse> result = events.map(event -> {
-            boolean allSoldOut = !productRepository.existsByEventAndStockGreaterThan(event, 0);
-            return EventListResponse.from(event, now, allSoldOut);
-        });
+        // 조회된 이벤트들의 "재고 있음 여부"를 한 번의 쿼리로 가져옴 (N+1 방지)
+        // 이벤트마다 재고 조회를 하면 목록 1번 + 이벤트 수만큼 N번 = 1+N 쿼리가 나감
+        Set<Long> inStockEventIds = findInStockEventIds(events.getContent());
+
+        Page<EventListResponse> result = events.map(event ->
+                // 위 목록에 없으면 재고가 남은 상품이 하나도 없다는 뜻 → 품절
+                EventListResponse.from(event, now, !inStockEventIds.contains(event.getId()))
+        );
 
         return PageResponse.from(result);
     }
@@ -107,13 +110,18 @@ public class EventService {
             grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(event);
         }
 
+        // 차수 상태는 그룹의 첫 이벤트 기준으로 계산하므로, 대표 이벤트들만 모아
+        // 재고 여부를 한 번에 조회한다 (차수마다 조회하면 N+1)
+        List<Event> firstEvents = grouped.values().stream().map(group -> group.get(0)).toList();
+        Set<Long> inStockEventIds = findInStockEventIds(firstEvents);
+
         // 1차부터 순서대로 차수 번호 부여
         List<LineupRoundResponse> result = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
         int round = 1;
         for (List<Event> group : grouped.values()) {
             Event first = group.get(0);
-            boolean allSoldOut = !productRepository.existsByEventAndStockGreaterThan(first, 0);
+            boolean allSoldOut = !inStockEventIds.contains(first.getId());
             result.add(LineupRoundResponse.builder()
                     .round(round++)
                     .status(EventStatusCalculator.resolve(first, now, allSoldOut).name())
@@ -121,5 +129,18 @@ public class EventService {
                     .build());
         }
         return result;
+    }
+
+    // 이벤트 목록을 받아 "재고가 남은 상품이 하나라도 있는" 이벤트 id를 한 번의 쿼리로 조회
+    // 반환값을 Set으로 만드는 이유: 이후 contains() 판정이 이벤트 수와 무관하게 빠름
+    private Set<Long> findInStockEventIds(List<Event> events) {
+        // 조회할 이벤트가 없으면 쿼리 자체를 보내지 않음
+        // (빈 리스트를 IN 절에 넣으면 DB/드라이버에 따라 문법 오류가 날 수 있음)
+        if (events.isEmpty()) {
+            return Set.of();
+        }
+
+        List<Long> eventIds = events.stream().map(Event::getId).toList();
+        return new HashSet<>(productRepository.findEventIdsHavingStock(eventIds));
     }
 }
