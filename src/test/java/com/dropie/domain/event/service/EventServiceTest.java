@@ -29,8 +29,13 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class EventServiceTest {
@@ -52,6 +57,7 @@ class EventServiceTest {
         // EventStatusCalculator가 derived status를 계산하므로 시간 기반 분기에 걸리지 않도록
         // 현재 시각이 startAt~endAt 사이에 들어오게 세팅 (DB OPEN과 derived OPEN이 일치)
         event = Event.builder()
+                .id(1L)  // 재고 여부를 이벤트 id로 묶어 조회하므로 id가 필요함
                 .brandName("노티드")
                 .description("브랜드 설명")
                 .thumbnailImageUrl("https://thumb.jpg")
@@ -107,7 +113,7 @@ class EventServiceTest {
         // status=OPEN으로 필터링하면 findByStatus가 호출되어야 함
         given(eventRepository.findByStatus(eq(EventStatus.OPEN), any(PageRequest.class))).willReturn(eventPage);
         // 재고가 남아있는 상태로 가정 → allSoldOut=false → derived가 SOLD_OUT으로 덮이지 않음
-        given(productRepository.existsByEventAndStockGreaterThan(any(), eq(0))).willReturn(true);
+        given(productRepository.findEventIdsHavingStock(List.of(1L))).willReturn(List.of(1L));
 
         // when
         PageResponse<EventListResponse> result = eventService.getEvents(1, 6, EventStatus.OPEN);
@@ -116,6 +122,50 @@ class EventServiceTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getStatus()).isEqualTo(EventStatus.OPEN);
         assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("이벤트 목록 조회 - 이벤트가 여러 개여도 재고 조회는 1번만 실행됨 (N+1 방지)")
+    void 이벤트_목록_조회_재고조회_한번만_실행() {
+        // given — 이벤트 3개가 담긴 페이지
+        LocalDateTime start = LocalDateTime.now().minusHours(1);
+        LocalDateTime end = LocalDateTime.now().plusHours(1);
+        Event e1 = Event.builder().id(1L).brandName("브랜드1").startAt(start).endAt(end).status(EventStatus.OPEN).build();
+        Event e2 = Event.builder().id(2L).brandName("브랜드2").startAt(start).endAt(end).status(EventStatus.OPEN).build();
+        Event e3 = Event.builder().id(3L).brandName("브랜드3").startAt(start).endAt(end).status(EventStatus.OPEN).build();
+
+        Page<Event> eventPage = new PageImpl<>(List.of(e1, e2, e3), PageRequest.of(0, 6), 3);
+        given(eventRepository.findAll(any(PageRequest.class))).willReturn(eventPage);
+        // 1번, 3번만 재고가 남아있고 2번은 전부 품절인 상황
+        given(productRepository.findEventIdsHavingStock(List.of(1L, 2L, 3L))).willReturn(List.of(1L, 3L));
+
+        // when
+        PageResponse<EventListResponse> result = eventService.getEvents(1, 6, null);
+
+        // then — 이벤트가 3개여도 재고 조회 쿼리는 딱 1번만 나가야 함
+        then(productRepository).should(times(1)).findEventIdsHavingStock(anyList());
+        // 이벤트마다 조회하던 기존 방식은 더 이상 호출되지 않음
+        then(productRepository).should(never()).existsByEventAndStockGreaterThan(any(), anyInt());
+
+        // 결과 자체도 정확해야 함 — 재고 없는 2번만 SOLD_OUT
+        assertThat(result.getContent().get(0).getStatus()).isEqualTo(EventStatus.OPEN);
+        assertThat(result.getContent().get(1).getStatus()).isEqualTo(EventStatus.SOLD_OUT);
+        assertThat(result.getContent().get(2).getStatus()).isEqualTo(EventStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("이벤트 목록 조회 - 조회 결과가 비어있으면 재고 조회 쿼리를 아예 실행하지 않음")
+    void 이벤트_목록_조회_빈페이지_재고조회_미실행() {
+        // given — 조회 결과가 0건
+        Page<Event> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 6), 0);
+        given(eventRepository.findAll(any(PageRequest.class))).willReturn(emptyPage);
+
+        // when
+        PageResponse<EventListResponse> result = eventService.getEvents(1, 6, null);
+
+        // then — 빈 리스트를 IN 절에 넣으면 문법 오류가 날 수 있으므로 쿼리 자체를 보내지 않아야 함
+        assertThat(result.getContent()).isEmpty();
+        then(productRepository).should(never()).findEventIdsHavingStock(anyList());
     }
 
     @Test
@@ -170,14 +220,15 @@ class EventServiceTest {
         LocalDateTime end2   = LocalDateTime.now().plusHours(1);
 
         // 1차: FINISHED 2개, 2차: OPEN 2개 — 같은 startAt/endAt끼리 묶여야 함
-        Event e1 = Event.builder().brandName("솔트버터").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
-        Event e2 = Event.builder().brandName("노아케이크").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
-        Event e3 = Event.builder().brandName("밀담제과").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
-        Event e4 = Event.builder().brandName("도넛클럽").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
+        Event e1 = Event.builder().id(1L).brandName("솔트버터").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
+        Event e2 = Event.builder().id(2L).brandName("노아케이크").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
+        Event e3 = Event.builder().id(3L).brandName("밀담제과").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
+        Event e4 = Event.builder().id(4L).brandName("도넛클럽").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
 
         given(eventRepository.findAllByOrderByStartAtAsc()).willReturn(List.of(e1, e2, e3, e4));
         // 재고가 남아있는 상태로 가정 → 2차의 OPEN이 SOLD_OUT으로 덮이지 않음
-        given(productRepository.existsByEventAndStockGreaterThan(any(), eq(0))).willReturn(true);
+        // 차수 상태는 그룹의 첫 이벤트(1차 e1, 2차 e3) 기준이므로 대표 id만 조회 대상이 됨
+        given(productRepository.findEventIdsHavingStock(List.of(1L, 3L))).willReturn(List.of(1L, 3L));
 
         // when
         List<LineupRoundResponse> result = eventService.getLineup();
@@ -220,9 +271,9 @@ class EventServiceTest {
         LocalDateTime end2   = LocalDateTime.of(2026, 12, 31, 23, 59);
         LocalDateTime end3   = LocalDateTime.of(2027, 3, 31, 23, 59);
 
-        Event e1 = Event.builder().brandName("1차브랜드").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
-        Event e2 = Event.builder().brandName("2차브랜드").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
-        Event e3 = Event.builder().brandName("3차브랜드").startAt(start3).endAt(end3).status(EventStatus.UPCOMING).build();
+        Event e1 = Event.builder().id(1L).brandName("1차브랜드").startAt(start1).endAt(end1).status(EventStatus.FINISHED).build();
+        Event e2 = Event.builder().id(2L).brandName("2차브랜드").startAt(start2).endAt(end2).status(EventStatus.OPEN).build();
+        Event e3 = Event.builder().id(3L).brandName("3차브랜드").startAt(start3).endAt(end3).status(EventStatus.UPCOMING).build();
 
         given(eventRepository.findAllByOrderByStartAtAsc()).willReturn(List.of(e1, e2, e3));
 
