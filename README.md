@@ -86,7 +86,8 @@
 | Pub/Sub Keyspace | `pending_order:{id}` | TTL 만료 → PENDING 자동 취소 |
 | 주문번호 시퀀스 | `order:seq:{yyyyMMdd}` | INCR, 다중 인스턴스 안전 |
 
-추가로 refresh / 이메일 인증 / 비밀번호 재설정 토큰 저장소로도 활용, AOF로 영속화
+추가로 이메일 인증 / 비밀번호 재설정 토큰 저장소로도 활용, AOF로 영속화 <br>
+Refresh Token은 탈퇴·로그아웃 시 유저 변경과 한 트랜잭션으로 묶기 위해 MySQL에 저장
 
 </details>
 
