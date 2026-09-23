@@ -8,7 +8,7 @@
 멀리 가지 않아도, 웨이팅하지 않아도 — 온라인으로 여는 디저트 팝업
 </blockquote>
 
-📍 [Live Demo](https://dropie.shop) · 📖 [API Docs (Swagger)](https://api.dropie.shop/swagger-ui.html) · 🎨 Frontend [dropie-frontend](https://github.com/cherry2766/dropie-frontend)
+📍 Live Demo (현재 미운영) · 📖 API Docs (Swagger, 현재 미운영) · 🎨 Frontend [dropie-frontend](https://github.com/cherry2766/dropie-frontend)
 
 
 <br><br>
